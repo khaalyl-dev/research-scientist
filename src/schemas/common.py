@@ -10,6 +10,7 @@ import enum
 
 class UserLevel(str, enum.Enum):
     """The three personalization levels the Teacher agent adapts to (US-01)."""
+
     beginner = "beginner"
     intermediate = "intermediate"
     expert = "expert"
@@ -17,12 +18,14 @@ class UserLevel(str, enum.Enum):
 
 class SourceType(str, enum.Enum):
     """Where a Source came from (US-03)."""
+
     arxiv = "arxiv"
     web = "web"
 
 
 class SessionStatus(str, enum.Enum):
     """Lifecycle of a research session (used by the History page, US-11)."""
+
     running = "running"
     completed = "completed"
     failed = "failed"
