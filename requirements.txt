@@ -1,0 +1,5 @@
+streamlit
+pytest
+black
+ruff
+mypy
