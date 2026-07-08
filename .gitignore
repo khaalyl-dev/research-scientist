@@ -1,0 +1,28 @@
+# Environments
+.venv/
+venv/
+.env
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Data (generated at runtime, not committed)
+data/research.db
+data/faiss_index/*
+data/graphs/*
+data/exports/*
+!data/faiss_index/.gitkeep
+!data/graphs/.gitkeep
+!data/exports/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
