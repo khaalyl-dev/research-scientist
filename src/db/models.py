@@ -41,6 +41,7 @@ def _now() -> datetime:
 
 class Base(DeclarativeBase):
     """Shared base class for all ORM models."""
+
     pass
 
 
@@ -51,6 +52,7 @@ class ResearchSession(Base):
     SQLAlchemy's own `Session` class (the DB connection object) — but the
     table name stays `sessions` since that's what the plan's diagram calls it.
     """
+
     __tablename__ = "sessions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -82,6 +84,7 @@ class ResearchSession(Base):
 
 class Source(Base):
     """One row = one document (arXiv paper or web page) found for a session."""
+
     __tablename__ = "sources"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -114,6 +117,7 @@ class Claim(Base):
     Format matches US-04 exactly: {entity, claim, confidence, source_url}.
     `source_url` isn't duplicated here — it's available via `claim.source.url`.
     """
+
     __tablename__ = "claims"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -140,6 +144,7 @@ class Contradiction(Base):
     to the same table (claims), SQLAlchemy needs `foreign_keys=` to know which
     column each relationship uses — otherwise it can't disambiguate.
     """
+
     __tablename__ = "contradictions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
