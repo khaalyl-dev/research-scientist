@@ -1,47 +1,40 @@
 """
-Structured logging configuration for the application.
+Structured logging setup — one call, consistent format everywhere.
 
-Provides consistent logging across all agents and clients.
+Every module does:
+    from src.utils.logger import get_logger
+    logger = get_logger(__name__)
+
+Format includes the timestamp, level, module name (so you know which
+agent/client logged it), and the message — important once 6 agents are all
+logging during a single pipeline run and you need to trace what happened.
 """
 
 import logging
 import sys
-from typing import Optional
+
+_CONFIGURED = False
 
 
-def setup_logger(
-    name: Optional[str] = None,
-    level: int = logging.INFO,
-    format_string: Optional[str] = None,
-) -> logging.Logger:
-    """
-    Set up a logger with consistent formatting.
+def _configure_root_logger() -> None:
+    global _CONFIGURED
+    if _CONFIGURED:
+        return
 
-    Args:
-        name: Logger name (default: root)
-        level: Logging level (default: INFO)
-        format_string: Custom format string
-
-    Returns:
-        Configured logger instance
-    """
-    if format_string is None:
-        format_string = (
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(
+        logging.Formatter(
+            fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
         )
+    )
 
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
-
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setLevel(level)
-        formatter = logging.Formatter(format_string)
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-
-    return logger
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    root.addHandler(handler)
+    _CONFIGURED = True
 
 
-# Default logger for the application
-app_logger = setup_logger("research-scientist")
+def get_logger(name: str) -> logging.Logger:
+    _configure_root_logger()
+    return logging.getLogger(name)
