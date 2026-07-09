@@ -1,16 +1,15 @@
 """initial schema: sessions, sources, claims, contradictions
 
 Revision ID: edca06fe3eb4
-Revises: 
+Revises:
 Create Date: 2026-07-08 00:17:58.982765
 
 """
 
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "edca06fe3eb4"

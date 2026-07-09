@@ -55,7 +55,7 @@ def brave_success_response():
                         "title": "Attention Is All You Need",
                         "url": "https://arxiv.org/abs/1706.03762",
                         "description": "The Transformer architecture paper.",
-                        "age": "2017",
+                        "published_date": "2017",
                     },
                     {
                         "title": "RAG blog post",

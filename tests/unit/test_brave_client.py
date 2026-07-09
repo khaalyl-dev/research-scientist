@@ -23,10 +23,10 @@ from src.clients.brave_client import (
 )
 from tests.unit.conftest import FakeDDGS, make_mock_response
 
-
 # ---------------------------------------------------------------------------
 # BraveSearchClient.search() — direct tests of the Brave call itself
 # ---------------------------------------------------------------------------
+
 
 class TestBraveSearchClient:
     async def test_search_success_parses_results(self, brave_success_response):
@@ -87,7 +87,9 @@ class TestBraveSearchClient:
     async def test_search_retries_on_timeout_then_succeeds(self, brave_success_response):
         # First call times out, second succeeds — proves the tenacity retry
         # decorator actually kicks in rather than failing on the first error.
-        mock_get = AsyncMock(side_effect=[httpx.TimeoutException("timed out"), brave_success_response])
+        mock_get = AsyncMock(
+            side_effect=[httpx.TimeoutException("timed out"), brave_success_response]
+        )
         with patch("httpx.AsyncClient.get", new=mock_get):
             client = BraveSearchClient(api_key="fake-key")
             results = await client.search("query")
@@ -109,20 +111,27 @@ class TestBraveSearchClient:
 # web_search() — the public entry point, including fallback behavior
 # ---------------------------------------------------------------------------
 
+
 class TestWebSearchFallback:
     async def test_uses_brave_when_successful_no_fallback(self, brave_success_response):
         never_called_ddgs = FakeDDGS(raise_exc=AssertionError("DuckDuckGo should not be called"))
-        with patch("httpx.AsyncClient.get", new=AsyncMock(return_value=brave_success_response)), \
-             patch("os.getenv", return_value="fake-key"):
+        with (
+            patch("httpx.AsyncClient.get", new=AsyncMock(return_value=brave_success_response)),
+            patch("os.getenv", return_value="fake-key"),
+        ):
             results = await web_search("query", ddgs_class=never_called_ddgs)
 
         assert all(r.engine == "brave" for r in results)
 
     async def test_falls_back_on_quota_exceeded(self):
         response = make_mock_response(429)
-        fake_ddgs = FakeDDGS([{"title": "DDG result", "href": "https://example.com", "body": "text"}])
-        with patch("httpx.AsyncClient.get", new=AsyncMock(return_value=response)), \
-             patch("os.getenv", return_value="fake-key"):
+        fake_ddgs = FakeDDGS(
+            [{"title": "DDG result", "href": "https://example.com", "body": "text"}]
+        )
+        with (
+            patch("httpx.AsyncClient.get", new=AsyncMock(return_value=response)),
+            patch("os.getenv", return_value="fake-key"),
+        ):
             results = await web_search("query", ddgs_class=fake_ddgs)
 
         assert len(results) == 1
@@ -138,9 +147,14 @@ class TestWebSearchFallback:
 
     async def test_falls_back_on_empty_brave_results(self):
         response = make_mock_response(200, {"web": {"results": []}})
-        fake_ddgs = FakeDDGS([{"title": "DDG fallback", "href": "https://example.net", "body": "text"}])
-        with patch("httpx.AsyncClient.get", new=AsyncMock(return_value=response)), \
-             patch("os.getenv", return_value="fake-key"):
+        fake_ddgs = FakeDDGS(
+            [{"title": "DDG fallback", "href": "https://example.net", "body": "text"}]
+        )
+
+        with (
+            patch("httpx.AsyncClient.get", new=AsyncMock(return_value=response)),
+            patch("os.getenv", return_value="fake-key"),
+        ):
             results = await web_search("query", ddgs_class=fake_ddgs)
 
         assert len(results) == 1
@@ -148,9 +162,13 @@ class TestWebSearchFallback:
 
     async def test_falls_back_after_repeated_timeouts(self):
         mock_get = AsyncMock(side_effect=httpx.TimeoutException("down"))
-        fake_ddgs = FakeDDGS([{"title": "DDG after timeout", "href": "https://x.com", "body": "text"}])
-        with patch("httpx.AsyncClient.get", new=mock_get), \
-             patch("os.getenv", return_value="fake-key"):
+        fake_ddgs = FakeDDGS(
+            [{"title": "DDG after timeout", "href": "https://x.com", "body": "text"}]
+        )
+        with (
+            patch("httpx.AsyncClient.get", new=mock_get),
+            patch("os.getenv", return_value="fake-key"),
+        ):
             results = await web_search("query", ddgs_class=fake_ddgs)
 
         assert len(results) == 1
@@ -160,8 +178,10 @@ class TestWebSearchFallback:
         response = make_mock_response(429)
         # missing "href" -> WebSearchResult will fail URL validation, should be skipped not crash
         fake_ddgs = FakeDDGS([{"title": "no url here", "body": "text"}])
-        with patch("httpx.AsyncClient.get", new=AsyncMock(return_value=response)), \
-             patch("os.getenv", return_value="fake-key"):
+        with (
+            patch("httpx.AsyncClient.get", new=AsyncMock(return_value=response)),
+            patch("os.getenv", return_value="fake-key"),
+        ):
             results = await web_search("query", ddgs_class=fake_ddgs)
 
         assert results == []
@@ -170,6 +190,7 @@ class TestWebSearchFallback:
 # ---------------------------------------------------------------------------
 # WebSearchResult schema validation
 # ---------------------------------------------------------------------------
+
 
 class TestWebSearchResultSchema:
     def test_rejects_invalid_url(self):

@@ -1,0 +1,163 @@
+# Autonomous Research Scientist
+
+> A multi-agent system that researches, extracts, verifies, and teaches
+> knowledge — with traceable sources. Ask a question, get a structured,
+> personalized, cited answer synthesized from arXiv and the web, plus a
+> knowledge graph and a research notebook.
+
+**Team:** Khalil & Zeineb · **Timeline:** 8 weeks, 4 sprints · **Status:** 🚧 Sprint 1 in progress
+
+---
+
+## What this is
+
+Given a natural-language question, the system:
+
+1. Breaks it into 3–5 sub-questions (**Planner**)
+2. Searches arXiv + the web in parallel (**Researcher**)
+3. Extracts structured claims from every source (**Extractor**)
+4. Detects contradictions between sources (**FactChecker**)
+5. Synthesizes a structured answer (**Reasoning**)
+6. Adapts the answer to Beginner / Intermediate / Expert level (**Teacher**)
+
+...all with clickable source citations, a live knowledge graph, and zero
+mandatory API cost (Groq's free tier + free search APIs + local fallbacks).
+
+See [`architecture.md`](./architecture.md) for how the pieces fit together
+and why they're built the way they are.
+
+## Tech stack
+
+| Layer | Choice |
+|---|---|
+| Orchestration | LangGraph (multi-agent state machine) |
+| LLM | Groq (Llama 3.1 70B), fallback to local Ollama |
+| Search | Brave Search API, fallback to DuckDuckGo |
+| Storage | SQLite (SQLAlchemy + Alembic), FAISS (vector search) |
+| Knowledge graph | NetworkX + pyvis |
+| Frontend | Streamlit |
+
+Full pinned versions in [`requirements.txt`](./requirements.txt).
+
+## Current status
+
+Built and tested so far (Sprint 1, in progress):
+
+- ✅ Project skeleton & tooling (`requirements.txt`, `.env.example`, `pyproject.toml`)
+- ✅ SQLAlchemy models: `sessions`, `sources`, `claims`, `contradictions` (`src/db/models.py`)
+- ✅ Alembic migrations, tested upgrade/downgrade (`src/db/migrations/`)
+- ✅ Pydantic schemas for in-memory agent state (`src/schemas/`)
+- ✅ Brave Search client with DuckDuckGo fallback, retry logic (`src/clients/brave_client.py`)
+- ✅ Unit tests for the Brave client — 17 tests, 99% coverage (`tests/unit/`)
+- ⏳ arXiv client (Khalil)
+- ⏳ BeautifulSoup page scraper (Khalil)
+- ⏳ Streamlit base UI (Khalil + Zeineb)
+- ⏳ Docker + CI (Khalil)
+
+Nothing runnable end-to-end yet — Sprint 1's goal is the plumbing (DB,
+schemas, search clients) before Sprint 2 wires up the actual LangGraph agent
+pipeline.
+
+## Setup
+
+**Prerequisites:** Python 3.11+
+
+```bash
+# 1. Clone and enter the repo
+git clone <repo-url>
+cd research-scientist
+
+# 2. Create a virtual environment
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Configure environment variables
+cp .env.example .env
+# then edit .env and fill in:
+#   GROQ_API_KEY     (free at console.groq.com)
+#   BRAVE_API_KEY    (free at brave.com/search/api, 2000 req/month, no card required)
+
+# 5. Initialize the database
+alembic upgrade head
+```
+
+That last step creates `data/research.db` with all four tables. Verify it worked:
+
+```bash
+python -c "
+from src.db.database import get_db_session
+from src.db.models import ResearchSession
+with get_db_session() as db:
+    print('DB OK, sessions so far:', db.query(ResearchSession).count())
+"
+```
+
+## Running tests
+
+```bash
+# Full suite
+pytest tests/unit/ -v
+
+# With coverage
+pytest --cov=src tests/unit/ --cov-report=term-missing
+```
+
+No API keys or internet access required — all external calls (Brave,
+DuckDuckGo) are mocked or dependency-injected in tests.
+
+## Database migrations
+
+We use Alembic, not raw `create_all()`, so schema changes are versioned and
+reversible.
+
+```bash
+# After changing a model in src/db/models.py:
+alembic revision --autogenerate -m "describe your change"
+
+# Review the generated file in src/db/migrations/versions/ before applying!
+alembic upgrade head
+
+# If something's wrong, undo the last migration:
+alembic downgrade -1
+```
+
+## Code quality
+
+```bash
+black src/ tests/       # format
+ruff check src/ tests/  # lint
+mypy src/                # type check
+```
+
+## Project structure
+
+```
+research-scientist/
+├── src/
+│   ├── agents/       # LangGraph agents (Sprint 2+)
+│   ├── clients/       # External API clients (arXiv, Brave Search)
+│   ├── db/            # SQLAlchemy models, Alembic migrations
+│   ├── schemas/       # Pydantic schemas (in-memory agent state)
+│   ├── embeddings/    # FAISS vector search (Sprint 2+)
+│   ├── knowledge/     # NetworkX knowledge graph (Sprint 3+)
+│   ├── cache/          # TTL query cache (Sprint 1)
+│   └── utils/          # Shared retry/logging utilities
+├── app/                # Streamlit frontend (Sprint 1+)
+├── tests/
+│   ├── unit/
+│   └── integration/
+├── data/               # SQLite DB, FAISS index, exports (gitignored)
+└── prompts/            # LLM prompts as separate files (Sprint 2+)
+```
+
+## Team
+
+Task ownership rotates by functional module, not by skill — see the full
+plan for the sprint-by-sprint breakdown.
+
+| | Khalil | Zeineb |
+|---|---|---|
+| Sprint 1 | Repo/Docker/CI, arXiv client, Streamlit base | DB models, migrations, schemas, Brave client, docs |

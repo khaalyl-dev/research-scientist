@@ -28,13 +28,13 @@ import requests
 from bs4 import BeautifulSoup
 from tenacity import (
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
 )
 
-from src.schemas.source import SourceSchema
 from src.schemas.common import SourceType
+from src.schemas.source import SourceSchema
 
 logger = logging.getLogger(__name__)
 
