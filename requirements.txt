@@ -44,3 +44,4 @@ python-dotenv==1.*
 duckduckgo-search>=6
 
 pytest-mock==3.*
+pytest-asyncio==0.*
