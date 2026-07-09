@@ -2,80 +2,77 @@
 
 ## Overview
 
-**Objective:**  
-Configure Alembic to manage database schema versioning through reversible and version-controlled migrations.
+**Objective:**
+Configure Alembic to manage database schema versioning through reversible, version-controlled migrations.
 
-**Status:** ✅ Completed
-
----
+**Related User Stories:** —
+**Owner:** Zeineb
+**Status:** Completed
 
 ## Description
 
-Alembic was integrated with SQLAlchemy to manage database schema changes in a safe and structured way.
+Alembic was integrated with SQLAlchemy to manage database schema changes in a safe and structured way, replacing the `init_db()` shortcut used during initial development.
 
 It provides:
 
 - Version-controlled database schema changes
-- Automated migration generation
+- Automated migration generation via diffing against the ORM models
 - Database upgrade and rollback support
-- Safe schema evolution without manual database modifications
-
----
+- Safe schema evolution without manual SQL
 
 ## Implementation
 
-### Alembic Configuration
+### Alembic Configuration (`alembic.ini`)
 
-Configured `alembic.ini` with:
-
-- Migration scripts location
-- SQLite database connection using environment variables (`SQLITE_PATH`)
-
----
+- `script_location` set to `src/db/migrations`
+- No hardcoded database URL — the `sqlalchemy.url` field is intentionally left blank in `alembic.ini` and set dynamically at runtime (see below), so the configuration file and `.env` can never drift out of sync.
 
 ### Migration Environment (`src/db/migrations/env.py`)
 
 Implemented:
 
-- Loading database configuration from `.env`
-- Connecting Alembic with SQLAlchemy models metadata
-- Enabling SQLite batch mode for schema alteration operations
-
----
+- Loading `SQLITE_PATH` from `.env` via `python-dotenv`, and building the database URL from it — the same variable `src/db/database.py` uses, so both layers always point at the same file.
+- Pointing Alembic's `target_metadata` at `Base.metadata` from `src/db/models.py`, enabling `--autogenerate` to diff the live database against the ORM models and write migration scripts automatically.
+- `render_as_batch=True`, set in both the online and offline migration functions. This is required specifically for SQLite: unlike Postgres, SQLite does not support most `ALTER TABLE` operations natively (no drop column, no column type changes). Batch mode works around this by rebuilding the table under the hood. Omitting this flag would cause any future migration that alters a column to fail silently on SQLite while appearing to work in testing against other databases.
 
 ### Initial Migration
 
-Created:
+Created `src/db/migrations/versions/edca06fe3eb4_initial_schema.py`:
 
-`src/db/migrations/versions/edca06fe3eb4_initial_schema.py`
-
-Implemented:
-
-- `upgrade()` to create the complete database schema with all required tables in dependency order
-- `downgrade()` to safely remove tables in reverse dependency order
-
----
+- `upgrade()` creates all four tables (`sessions`, `sources`, `claims`, `contradictions`) in foreign-key-safe dependency order.
+- `downgrade()` drops them in reverse order.
 
 ## Testing
 
-Validated:
+Validated directly against a real SQLite file (not just in-memory):
 
-✅ Database upgrade creates all required tables  
-✅ Database rollback removes the schema correctly  
-✅ Migration process works with a real SQLite database  
+- `alembic upgrade head` creates all four tables plus Alembic's own `alembic_version` tracking table.
+- `alembic downgrade base` fully reverses the migration, leaving only `alembic_version`.
+- Re-running `alembic upgrade head` after a downgrade succeeds cleanly, confirming the migration is safely repeatable.
 
-Verification:
+Verification commands:
 
 ```bash
 alembic upgrade head
-
 python -c "from src.db.database import get_db_session; print('DB migrated')"
+```
 
-Delivered
+## Workflow for future schema changes
 
-✅ alembic.ini - Alembic configuration
-✅ src/db/migrations/ - Migration scripts directory
-✅ src/db/migrations/env.py - Migration environment configuration
-✅ src/db/migrations/versions/edca06fe3eb4_initial_schema.py - Initial database migration
+```bash
+# 1. Edit src/db/models.py
+# 2. Generate the migration diff
+alembic revision --autogenerate -m "describe your change"
+# 3. Review the generated file in src/db/migrations/versions/ before applying —
+#    autogenerate is not perfect, especially for renames.
+# 4. Apply it
+alembic upgrade head
+```
 
-Status: ✅ Completed
+## Delivered
+
+- `alembic.ini` — Alembic configuration, no hardcoded credentials
+- `src/db/migrations/env.py` — migration environment, wired to `.env` and the ORM metadata
+- `src/db/migrations/versions/edca06fe3eb4_initial_schema.py` — initial schema migration, upgrade and downgrade both verified
+
+**Status:** Completed
