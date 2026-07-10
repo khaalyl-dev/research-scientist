@@ -10,13 +10,13 @@ a URL string comparison (URLs can have trailing slashes, tracking params, etc.
 
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class ClaimSchema(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     source_id: str = Field(..., description="id of the SourceSchema this claim came from")
-    source_url: HttpUrl = Field(..., description="Denormalized for display/export convenience")
+    source_url: str = Field(..., description="Denormalized for display/export convenience")  # ← Changed to str
 
     entity: str = Field(..., min_length=1, max_length=512)
     claim: str = Field(..., min_length=1)
