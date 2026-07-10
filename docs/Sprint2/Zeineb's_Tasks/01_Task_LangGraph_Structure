@@ -1,5 +1,5 @@
 Task 1: LangGraph Structure — GraphState + Graph Builder
-1. Overview
+Overview
 Objective:
 Design and implement the LangGraph state machine that orchestrates all agents in the pipeline, from query decomposition to final response generation.
 
@@ -7,7 +7,7 @@ Estimate: 4 hours
 
 Status: Completed
 
-2. Description
+Description
 The LangGraph structure is the brain of the entire system. It orchestrates all agents in a state machine, replacing disconnected functions with a unified, stateful pipeline.
 
 Why LangGraph (vs a linear pipeline with callbacks)
@@ -32,7 +32,7 @@ text
 Planner → Researcher → Extractor (parallel per source) → FactChecker → Reasoning → Teacher
 This is a deliberate modification from a purely sequential pipeline: the Extractor runs in parallel across sources, not one after another.
 
-3. Implementation
+Implementation
 GraphState (src/agents/state.py)
 The GraphState TypedDict defines the shared state passed between all agents. It includes:
 
@@ -82,7 +82,7 @@ Extractor	2 dummy claims per source
 FactChecker	Empty contradiction list
 Reasoning	Dummy reasoning text
 Teacher	Dummy final response
-4. Testing
+Testing
 The pipeline was tested by running the graph module directly.
 
 Expected Output:
@@ -115,7 +115,7 @@ Send import error	In LangGraph 1.x, Send is imported from langgraph.types, not l
 HttpUrl serialization error	Changed HttpUrl to str in SourceSchema and ClaimSchema. Pydantic models are converted to dicts via .model_dump() before being returned from nodes.
 Parallel update conflict	Removed current_agent from the Extractor return — parallel nodes should not all write to the same single-value field.
 SessionStatus enum mismatch	Corrected status values to match the actual enum definition (running, completed).
-5. Files Modified/Created
+Files Modified/Created
 File	Action	Description
 src/agents/__init__.py	Created	Package initialization
 src/agents/state.py	Created	GraphState TypedDict
@@ -123,7 +123,7 @@ src/agents/graph.py	Created	Graph builder with 6 stub agents
 src/schemas/claim.py	Modified	Changed source_url from HttpUrl to str
 src/schemas/source.py	Modified	Changed url from HttpUrl to str
 requirements.txt	Modified	Updated LangGraph/LangChain to 1.x for compatibility
-6. Dependencies Updated
+Dependencies Updated
 The original plan pinned langgraph==0.2.x and langchain==0.3.x. These versions are outdated and incompatible with each other. We upgraded to:
 
 Package	Old Version	New Version
@@ -131,7 +131,7 @@ LangGraph	0.2.x	1.0.x
 LangChain	0.3.x	1.0.x
 LangChain Core	0.3.x	1.0.x
 LangChain Groq	0.2.x	1.0.x
-7. Handoff Notes for Khalil
+Handoff Notes for Khalil
 What's Ready for You
 src/agents/state.py — The GraphState is fully defined. Your agents should read from and write to this state.
 
@@ -146,7 +146,7 @@ Parallel extraction: The Extractor uses Send(). When you add the FAISS pipeline,
 
 Serialization: Return dicts (via .model_dump()), not Pydantic models directly, to avoid msgpack serialization errors.
 
-8. Task Completion
+Task Completion
 Delivered:
 
 GraphState TypedDict — shared state definition
