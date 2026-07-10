@@ -1,165 +1,263 @@
-Task 1: LangGraph Structure — GraphState + Graph Builder
-Overview
-Objective:
+# Sprint 2 — Task 1: LangGraph Structure (GraphState + Graph Builder)
+
+## Overview
+
+### Objective
 Design and implement the LangGraph state machine that orchestrates all agents in the pipeline, from query decomposition to final response generation.
 
-Estimate: 4 hours
+| Field | Value |
+|--------|-------|
+| **Estimate** | 4 hours |
+| **Status** | ✅ Completed |
 
-Status: Completed
+---
 
-Description
+# Description
+
 The LangGraph structure is the brain of the entire system. It orchestrates all agents in a state machine, replacing disconnected functions with a unified, stateful pipeline.
 
-Why LangGraph (vs a linear pipeline with callbacks)
-LangGraph was chosen over a simple linear pipeline for several reasons:
+## Why LangGraph (vs. a Linear Pipeline with Callbacks)
 
-Shared typed state — all agents read from and write to a single GraphState TypedDict, eliminating the need to pass data through function arguments manually
+LangGraph was chosen over a traditional linear pipeline for several reasons:
 
-Built-in retry logic — individual nodes can be retried on failure without affecting the rest of the pipeline
+- **Shared typed state** — All agents read from and write to a single `GraphState` `TypedDict`, eliminating the need to manually pass data through function arguments.
+- **Built-in retry logic** — Individual nodes can be retried independently without restarting the entire pipeline.
+- **Parallel execution** — The Extractor agent runs one instance per source simultaneously via `Send()`, reducing latency by approximately **40%** for a 5-source query.
+- **Checkpointing** — `MemorySaver` provides automatic state persistence, enabling pause/resume functionality and easier debugging.
+- **Conditional branching** — Nodes can dynamically choose the next step (e.g., skipping the FactChecker when no contradictions are detected).
+- **Native streaming** — LangGraph streams node outputs directly to Streamlit, allowing users to monitor agent progress in real time.
 
-Parallel execution — the Extractor agent runs one instance per source simultaneously via Send(), cutting total latency by ~40% for a 5-source query
+---
 
-Checkpointing — MemorySaver provides free state persistence, enabling pause/resume and debugging
+## Agent Execution Order
 
-Conditional branching — nodes can dynamically decide the next step (e.g., skip FactChecker if no contradictions are found)
+The pipeline follows the workflow defined in the project plan.
 
-Native streaming — LangGraph streams node outputs directly to Streamlit, enabling agent-by-agent progress display
+```text
+Planner
+    │
+    ▼
+Researcher
+    │
+    ▼
+Extractor (parallel per source)
+    │
+    ▼
+FactChecker
+    │
+    ▼
+Reasoning
+    │
+    ▼
+Teacher
+```
 
-Agent Order
-The pipeline follows the order defined in the project plan:
+Unlike a purely sequential pipeline, the **Extractor** executes one instance per source in parallel rather than processing sources one after another.
 
-text
-Planner → Researcher → Extractor (parallel per source) → FactChecker → Reasoning → Teacher
-This is a deliberate modification from a purely sequential pipeline: the Extractor runs in parallel across sources, not one after another.
+---
 
-Implementation
-GraphState (src/agents/state.py)
-The GraphState TypedDict defines the shared state passed between all agents. It includes:
+# Implementation
 
-User input — query and user level
+## GraphState (`src/agents/state.py`)
 
-Pipeline control — session ID, status, current agent, retry count
+The `GraphState` `TypedDict` defines the shared state passed between every agent.
 
-Planner output — sub-queries
+### State Contents
 
-Researcher output — sources
+- **User Input**
+  - Query
+  - User level
 
-Extractor output — claims (accumulated in parallel)
+- **Pipeline Control**
+  - Session ID
+  - Status
+  - Current agent
+  - Retry count
 
-FactChecker output — contradictions
+- **Planner Output**
+  - Sub-queries
 
-Reasoning output — reasoning text
+- **Researcher Output**
+  - Sources
 
-Teacher output — final response
+- **Extractor Output**
+  - Claims (accumulated in parallel)
 
-Errors — optional error field
+- **FactChecker Output**
+  - Contradictions
 
-Key design decisions:
+- **Reasoning Output**
+  - Reasoning text
 
-Decision	Rationale
-Flattened state (not nested)	LangGraph merges partial updates by key. Flattened keys merge cleanly.
-Reducer for claims (operator.add)	Automatically merges results from parallel Extractors without overwriting.
-Using dicts, not Pydantic models	Pydantic models (HttpUrl) are not msgpack-serializable, which caused checkpointing errors. Converting to dict via .model_dump() resolved this.
-Graph Builder (src/agents/graph.py)
-The graph builder defines the pipeline structure with six nodes connected in sequence:
+- **Teacher Output**
+  - Final response
 
+- **Errors**
+  - Optional error field
+
+### Key Design Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Flattened state (not nested) | LangGraph merges partial updates by key. Flattened keys merge cleanly. |
+| `operator.add` reducer for claims | Automatically merges results from parallel Extractors without overwriting previous claims. |
+| Dictionaries instead of Pydantic models | `HttpUrl` objects are not msgpack-serializable. Returning dictionaries via `.model_dump()` resolves checkpointing issues. |
+
+---
+
+## Graph Builder (`src/agents/graph.py`)
+
+The graph builder defines the six-node orchestration pipeline.
+
+```text
 Planner → Researcher → Extractor → FactChecker → Reasoning → Teacher
+```
 
-The entry point is the Planner agent, and the flow ends after the Teacher agent.
+- **Entry Point:** Planner
+- **Exit Point:** Teacher
 
-Parallel Extraction via Send()
-The key innovation is parallel extraction. After the Researcher returns a list of sources, the graph fans out to one Extractor instance per source using LangGraph's Send() API. Each Extractor runs independently on one source. All results are merged back into state["claims"] via the operator.add reducer.
+---
 
-This approach reduces total latency by approximately 40% for a 5-source query compared to sequential extraction.
+## Parallel Extraction via `Send()`
 
-Stub Agents
-Initially, all agents are stub functions that return dummy data. This allowed us to verify the graph structure works before implementing real LLM calls:
+The primary optimization in the graph is **parallel extraction**.
 
-Stub Agent	Output
-Planner	3 dummy sub-queries
-Researcher	3 dummy sources
-Extractor	2 dummy claims per source
-FactChecker	Empty contradiction list
-Reasoning	Dummy reasoning text
-Teacher	Dummy final response
-Testing
-The pipeline was tested by running the graph module directly.
+After the Researcher produces a list of sources:
 
-Expected Output:
+1. The graph fans out using LangGraph's `Send()` API.
+2. One Extractor instance is launched for each source.
+3. Every Extractor processes its assigned source independently.
+4. Results are merged into `state["claims"]` using the `operator.add` reducer.
 
-Planner processes the query
+This approach reduces extraction latency by approximately **40%** for a five-source query compared to sequential execution.
 
-Researcher generates 3 dummy sources
+---
 
-Extractor runs 3 times in parallel (one per source)
+## Stub Agents
 
-Each Extractor generates 2 claims
+Initially, every agent was implemented as a stub to validate the graph structure before integrating real LLM calls.
 
-FactChecker receives 6 claims
+| Agent | Stub Output |
+|--------|-------------|
+| Planner | 3 dummy sub-queries |
+| Researcher | 3 dummy sources |
+| Extractor | 2 dummy claims per source |
+| FactChecker | Empty contradiction list |
+| Reasoning | Dummy reasoning text |
+| Teacher | Dummy final response |
 
-Reasoning generates dummy synthesis
+---
 
-Teacher generates dummy final response
+# Testing
 
-Pipeline completion confirms:
+The graph was validated by executing the pipeline directly.
 
-3 sources generated
+## Expected Execution
 
-6 claims extracted (2 per source)
+- Planner processes the user query.
+- Researcher generates **3** dummy sources.
+- Extractor launches **3 parallel instances** (one per source).
+- Each Extractor produces **2** dummy claims.
+- FactChecker receives **6** claims.
+- Reasoning generates a dummy synthesis.
+- Teacher generates the final dummy response.
 
-Status set to completed
+### Successful Completion Confirms
 
-Issues Encountered and Resolved
-Issue	Resolution
-Send import error	In LangGraph 1.x, Send is imported from langgraph.types, not langgraph.graph.
-HttpUrl serialization error	Changed HttpUrl to str in SourceSchema and ClaimSchema. Pydantic models are converted to dicts via .model_dump() before being returned from nodes.
-Parallel update conflict	Removed current_agent from the Extractor return — parallel nodes should not all write to the same single-value field.
-SessionStatus enum mismatch	Corrected status values to match the actual enum definition (running, completed).
-Files Modified/Created
-File	Action	Description
-src/agents/__init__.py	Created	Package initialization
-src/agents/state.py	Created	GraphState TypedDict
-src/agents/graph.py	Created	Graph builder with 6 stub agents
-src/schemas/claim.py	Modified	Changed source_url from HttpUrl to str
-src/schemas/source.py	Modified	Changed url from HttpUrl to str
-requirements.txt	Modified	Updated LangGraph/LangChain to 1.x for compatibility
-Dependencies Updated
-The original plan pinned langgraph==0.2.x and langchain==0.3.x. These versions are outdated and incompatible with each other. We upgraded to:
+- 3 sources generated
+- 6 claims extracted (2 per source)
+- Status updated to `completed`
 
-Package	Old Version	New Version
-LangGraph	0.2.x	1.0.x
-LangChain	0.3.x	1.0.x
-LangChain Core	0.3.x	1.0.x
-LangChain Groq	0.2.x	1.0.x
-Handoff Notes for Khalil
-What's Ready for You
-src/agents/state.py — The GraphState is fully defined. Your agents should read from and write to this state.
+---
 
-src/agents/graph.py — The graph structure is built. You can replace the stub agents (Planner, FactChecker, Teacher) with your real implementations.
+# Issues Encountered & Resolutions
 
-run_pipeline() — This function is the entry point. You can call it to test the full pipeline.
+| Issue | Resolution |
+|-------|------------|
+| `Send` import error | In LangGraph 1.x, `Send` is imported from `langgraph.types` instead of `langgraph.graph`. |
+| `HttpUrl` serialization error | Replaced `HttpUrl` with `str` in `SourceSchema` and `ClaimSchema`. Converted Pydantic models to dictionaries via `.model_dump()`. |
+| Parallel update conflict | Removed `current_agent` from the Extractor return because multiple parallel nodes should not update the same single-value field. |
+| `SessionStatus` enum mismatch | Updated status values to match the enum definition (`running`, `completed`). |
 
-What You Need to Know
-State keys: All state keys are defined in GraphState. Your agent should return a dict containing the keys it updates.
+---
 
-Parallel extraction: The Extractor uses Send(). When you add the FAISS pipeline, make sure the FactChecker reads from state["claims"].
+# Files Modified / Created
 
-Serialization: Return dicts (via .model_dump()), not Pydantic models directly, to avoid msgpack serialization errors.
+| File | Action | Description |
+|------|--------|-------------|
+| `src/agents/__init__.py` | Created | Package initialization |
+| `src/agents/state.py` | Created | `GraphState` TypedDict |
+| `src/agents/graph.py` | Created | Graph builder with six stub agents |
+| `src/schemas/claim.py` | Modified | Changed `source_url` from `HttpUrl` to `str` |
+| `src/schemas/source.py` | Modified | Changed `url` from `HttpUrl` to `str` |
+| `requirements.txt` | Modified | Updated LangGraph and LangChain dependencies |
 
-Task Completion
-Delivered:
+---
 
-GraphState TypedDict — shared state definition
+# Dependencies Updated
 
-Graph builder with 6 stub agents — pipeline structure
+The original project plan targeted older versions of LangGraph and LangChain that are no longer compatible.
 
-Parallel extraction via Send() — working
+| Package | Old Version | New Version |
+|----------|------------|------------|
+| LangGraph | `0.2.x` | `1.0.x` |
+| LangChain | `0.3.x` | `1.0.x` |
+| LangChain Core | `0.3.x` | `1.0.x` |
+| LangChain Groq | `0.2.x` | `1.0.x` |
 
-State merging via operator.add — working
+---
 
-All serialization issues resolved
+# Handoff Notes for Khalil
 
-Updated dependencies for compatibility
+## What's Ready
 
-Verification:
-The pipeline runs end-to-end without errors, generating 3 sources and 6 claims.
+- `src/agents/state.py`
+  - Fully defined `GraphState`.
+  - All agents should read from and write to this shared state.
+
+- `src/agents/graph.py`
+  - Complete graph structure.
+  - Stub agents can now be replaced with production implementations.
+
+- `run_pipeline()`
+  - Entry point for testing the complete workflow.
+
+---
+
+## Important Notes
+
+- Every agent should return **only the state keys it updates**.
+- The Extractor uses **parallel execution via `Send()`**.
+- The FactChecker should consume `state["claims"]`.
+- Always return **dictionaries** (`.model_dump()`) instead of raw Pydantic objects to avoid msgpack serialization errors.
+
+---
+
+# Task Completion
+
+## Delivered
+
+- GraphState `TypedDict`
+- Graph builder with six stub agents
+- Parallel extraction via `Send()`
+- State merging using `operator.add`
+- Serialization issues resolved
+- Updated dependencies for LangGraph 1.x compatibility
+
+---
+
+## Verification
+
+The pipeline executes successfully from start to finish without errors.
+
+**Results**
+
+- **3 sources generated**
+- **6 claims extracted**
+- **End-to-end execution successful**
+
+---
+
+# Final Status
+
+> **Task Completed**
