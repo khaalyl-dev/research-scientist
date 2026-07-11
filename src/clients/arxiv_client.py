@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import time
+import uuid
 from typing import List
 
 import arxiv
@@ -34,7 +35,6 @@ from tenacity import (
 
 from src.schemas.common import SourceType
 from src.schemas.source import SourceSchema
-import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +115,7 @@ class ArxivClient:
         content = f"Authors: {authors}\n\n{abstract}" if authors else abstract
 
         return SourceSchema(
-            id=str(uuid.uuid4()),  
+            id=str(uuid.uuid4()),
             source_type=SourceType.arxiv,
             title=result.title.strip(),
             url=result.entry_id,  # canonical arxiv.org/abs/... URL, HttpUrl validates it

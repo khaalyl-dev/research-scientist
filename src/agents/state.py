@@ -2,12 +2,13 @@
 LangGraph state definition for the agent pipeline.
 This TypedDict is the shared state passed between all agents.
 """
-from typing import TypedDict, Annotated, Optional
+
 import operator
-from src.schemas.session import SessionSchema
-from src.schemas.source import SourceSchema
+from typing import Annotated, Optional, TypedDict
+
 from src.schemas.claim import ClaimSchema
-from src.schemas.common import UserLevel, SessionStatus
+from src.schemas.common import SessionStatus, UserLevel
+from src.schemas.source import SourceSchema
 
 
 class GraphState(TypedDict):
@@ -15,6 +16,7 @@ class GraphState(TypedDict):
     Shared state for the LangGraph pipeline.
     All agents read from and write to this state.
     """
+
     # --- User input ---
     query: str
     user_level: UserLevel

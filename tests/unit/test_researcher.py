@@ -8,7 +8,7 @@ client files being present or on his exact internal implementation, only
 on the interface contract documented at the top of researcher.py.
 """
 
-import pytest
+import uuid
 
 from src.agents.researcher import researcher_node
 from src.agents.state import GraphState
@@ -77,8 +77,6 @@ class FakeScraper:
         )
 
 
-import uuid
-
 def make_arxiv_source(query: str, suffix: str = "1") -> SourceSchema:
     return SourceSchema(
         id=str(uuid.uuid4()),  # ← ADD THIS!
@@ -89,6 +87,7 @@ def make_arxiv_source(query: str, suffix: str = "1") -> SourceSchema:
         published_year=2025,
     )
 
+
 def make_web_search_fn(hits_by_query: dict):
     async def fake_web_search(query: str, count: int = 5) -> list[WebSearchResult]:
         return hits_by_query.get(query, [])[:count]
@@ -97,6 +96,7 @@ def make_web_search_fn(hits_by_query: dict):
 
 
 # ---------------------------------------------------------------------------
+
 
 class TestResearcherNode:
     async def test_aggregates_arxiv_and_web_sources(self):
@@ -126,11 +126,13 @@ class TestResearcherNode:
         state = make_state("s1", "q", UserLevel.beginner)
         state["sub_queries"] = ["sub-a", "sub-b", "sub-c"]
 
-        arxiv = FakeArxivClient({
-            "sub-a": [make_arxiv_source("sub-a", "a")],
-            "sub-b": [make_arxiv_source("sub-b", "b")],
-            "sub-c": [make_arxiv_source("sub-c", "c")],
-        })
+        arxiv = FakeArxivClient(
+            {
+                "sub-a": [make_arxiv_source("sub-a", "a")],
+                "sub-b": [make_arxiv_source("sub-b", "b")],
+                "sub-c": [make_arxiv_source("sub-c", "c")],
+            }
+        )
         result = await researcher_node(
             state, arxiv_client=arxiv, scraper=FakeScraper(), web_search_fn=make_web_search_fn({})
         )
@@ -211,7 +213,10 @@ class TestResearcherNode:
         state = make_state("s1", "q", UserLevel.beginner)
         state["sub_queries"] = ["sub-a"]
 
-        hits = {"sub-a": [WebSearchResult(title="ok", url="https://example.com/good", engine="brave")]}
+        hits = {
+            "sub-a": [WebSearchResult(title="ok", url="https://example.com/good", engine="brave")]
+        }
+
         arxiv = FakeArxivClient(raise_exc=RuntimeError("arXiv API down"))
 
         result = await researcher_node(
@@ -248,4 +253,5 @@ class TestResearcherNode:
         )
 
         from src.agents.researcher import MAX_TOTAL_SOURCES
+
         assert len(result["sources"]) <= MAX_TOTAL_SOURCES

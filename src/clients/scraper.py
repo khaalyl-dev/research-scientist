@@ -22,6 +22,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Optional
 
 import requests
@@ -35,7 +36,6 @@ from tenacity import (
 
 from src.schemas.common import SourceType
 from src.schemas.source import SourceSchema
-import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +134,7 @@ class WebScraper:
             return None
 
         return SourceSchema(
-            id=str(uuid.uuid4()),  
+            id=str(uuid.uuid4()),
             source_type=SourceType.web,
             title=title,
             url=url,

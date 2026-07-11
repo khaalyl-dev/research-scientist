@@ -11,7 +11,9 @@ src/clients/arxiv_client.py and src/clients/scraper.py (not an inferred
 interface). Confirmed signatures:
 
     from src.clients.arxiv_client import ArxivClient
-    ArxivClient(min_interval: float = 3.0).search(query: str, max_results: int = 5) -> List[SourceSchema]
+    ArxivClient(min_interval: float = 3.0).search(
+    query: str, max_results: int = 5
+) -> List[SourceSchema]
     # synchronous; internally throttled (~3s between calls) and retried
     # (tenacity, 3 attempts); never raises — returns [] on failure
 
