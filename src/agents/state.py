@@ -2,10 +2,10 @@
 LangGraph state definition for the agent pipeline.
 """
 
-from typing import TypedDict, Annotated, Optional, List, Any
 import operator
+from typing import Annotated, List, Optional, TypedDict
 
-from src.schemas.common import UserLevel, SessionStatus
+from src.schemas.common import UserLevel
 
 
 class GraphState(TypedDict):
