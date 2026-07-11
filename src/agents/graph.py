@@ -5,19 +5,19 @@ LangGraph graph builder for the agent pipeline.
 import uuid
 from typing import List
 
-from langgraph.graph import StateGraph, END
-from langgraph.types import Send
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, StateGraph
+from langgraph.types import Send
 
 from src.agents.state import GraphState
+from src.schemas.claim import ClaimSchema
 from src.schemas.common import SessionStatus, UserLevel
 from src.schemas.source import SourceSchema
-from src.schemas.claim import ClaimSchema
-
 
 # ============================================================================
 # STUB AGENTS
 # ============================================================================
+
 
 def planner_agent(state: GraphState) -> dict:
     """Stub Planner - decomposes query into sub-queries."""
@@ -46,7 +46,7 @@ def researcher_agent(state: GraphState) -> dict:
             url=f"https://example.com/source_{i}",
             title=f"Source {i} about {state['query']}",
             source_type="arxiv",
-            year=2024,
+            published_year=2024,
             content=f"Dummy content for source {i}.",
         ).model_dump()
         for i in range(3)
@@ -66,8 +66,8 @@ def extractor_agent(state: dict) -> dict:
     claims = [
         ClaimSchema(
             id=str(uuid.uuid4()),
-            source_id=source['id'] if source else str(uuid.uuid4()),
-            source_url=source['url'] if source else "",
+            source_id=source["id"] if source else str(uuid.uuid4()),
+            source_url=source["url"] if source else "",
             entity=f"Concept_{i}",
             claim=f"Claim {i} about {source['title'] if source else 'unknown'}",
             confidence=0.85 + (i * 0.05),
@@ -107,11 +107,17 @@ def reasoning_agent(state: GraphState) -> dict:
 
 def teacher_agent(state: GraphState) -> dict:
     """Stub Teacher - writes final response."""
-    level = state["user_level"].value if hasattr(state["user_level"], "value") else state["user_level"]
+    level = (
+        state["user_level"].value if hasattr(state["user_level"], "value") else state["user_level"]
+    )
     print(f"[Teacher] Writing response at {level} level")
 
     return {
-        "final_response": f"# Answer about '{state['query']}'\n\n**Level: {level}**\n\nThis is a stub response.",
+        "final_response": (
+            f"# Answer about '{state['query']}'\n\n"
+            f"**Level: {level}**\n\n"
+            f"This is a stub response."
+        ),
         "current_agent": "teacher",
         "status": SessionStatus.completed.value,
     }
@@ -120,6 +126,7 @@ def teacher_agent(state: GraphState) -> dict:
 # ============================================================================
 # GRAPH BUILDER
 # ============================================================================
+
 
 def build_graph():
     """Build the LangGraph pipeline."""
@@ -135,11 +142,7 @@ def build_graph():
     builder.set_entry_point("planner")
     builder.add_edge("planner", "researcher")
 
-    builder.add_conditional_edges(
-        "researcher",
-        create_extraction_jobs,
-        ["extractor"]
-    )
+    builder.add_conditional_edges("researcher", create_extraction_jobs, ["extractor"])
 
     builder.add_edge("extractor", "fact_checker")
     builder.add_edge("fact_checker", "reasoning")
