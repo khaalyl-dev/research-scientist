@@ -48,7 +48,7 @@ Model	Llama 3.3 70B
 Integration	langchain-groq
 Model Name	llama-3.3-70b-versatile
 
-Advantages:
+### Advantages:
 
 High inference speed
 Free tier availability
@@ -57,7 +57,7 @@ Automatic Fallback
 
 The client automatically switches to local Ollama when Groq fails.
 
-Fallback scenarios:
+### Fallback scenarios:
 
 API failure
 Rate limit reached
@@ -65,7 +65,7 @@ Network error
 Model unavailable
 Service interruption
 
-Flow:
+### Flow:
 
 Agent Request
       |
@@ -85,7 +85,7 @@ Try Groq Llama 3.3 70B
               +---- Success --> Return response
               |
               +---- Failure --> Raise Error
-File Structure
+### File Structure
 File	Description
 src/clients/llm_client.py	LLM client with Groq + Ollama fallback
 tests/unit/test_llm_client.py	Unit tests for the client
@@ -93,7 +93,7 @@ requirements.txt	Added langchain-ollama dependency
 Implementation
 LLMClient Class
 
-The LLMClient class is responsible for:
+### The LLMClient class is responsible for:
 
 Loading configuration from .env
 Initializing LLM providers lazily
@@ -104,7 +104,7 @@ generate() Method
 
 The public method follows three steps:
 
-1. Try Groq First
+### 1. Try Groq First
 
 If:
 
@@ -113,7 +113,7 @@ The model is available
 
 The request is sent to Groq.
 
-2. Fallback to Ollama
+### 2. Fallback to Ollama
 
 If Groq fails and fallback is enabled:
 
@@ -121,7 +121,7 @@ GROQ_FALLBACK=ollama
 
 The request is automatically redirected to the local Ollama model.
 
-3. Raise Error
+### 3. Raise Error
 
 If both providers fail:
 
@@ -133,7 +133,7 @@ Uses LangChain Groq:
 
 from langchain_groq import ChatGroq
 
-Configuration:
+### Configuration:
 
 LLM_MODEL=llama-3.3-70b-versatile
 Ollama Integration
@@ -142,7 +142,7 @@ Uses LangChain Ollama:
 
 from langchain_ollama import ChatOllama
 
-Fallback model:
+### Fallback model:
 
 OLLAMA_MODEL_QUALITY=llama3.1:8b
 Configuration
@@ -171,25 +171,25 @@ The client is tested by:
 
 Mocking Groq
 
-Tests:
+### Tests:
 
 Successful Groq response
 Groq failure scenarios
 Mocking Ollama
 
-Tests:
+### Tests:
 
 Correct fallback execution
 Ollama response handling
 Environment Overrides
 
-Tests:
+### Tests:
 
 Different configurations
 Fallback enabled/disabled behavior
 Manual Testing
 
-Command:
+### Command:
 
 python -c "
 from src.clients.llm_client import LLMClient
@@ -201,7 +201,7 @@ response = client.generate('Say hello in one word')
 print(response)
 "
 
-Expected output:
+### Expected output:
 
 Hello
 Issues Encountered & Resolutions
@@ -221,7 +221,7 @@ The LLM client is ready:
 
 src/clients/llm_client.py
 
-Usage:
+### Usage:
 
 from src.clients.llm_client import LLMClient
 
@@ -237,7 +237,7 @@ Configure fallback model using:
 OLLAMA_MODEL_QUALITY
 Ensure Groq API key is configured:
 GROQ_API_KEY=gsk_xxxxxxxxx
-Task Completion
+### Task Completion
 Delivered
 
 LLM client with Groq + Ollama fallback
@@ -245,9 +245,9 @@ Unified generate() interface
 Environment-based configuration
 Error handling and logging
 Updated requirements.txt
-Unit tests
+### Unit tests
 
-Verification
+### Verification
 
 Run:
 
@@ -257,9 +257,9 @@ from src.clients.llm_client import LLMClient
 print('LLM Client OK')
 "
 
-Expected output:
+### Expected output:
 
 LLM Client OK
-Status
+### Status
 
 Task Completed
