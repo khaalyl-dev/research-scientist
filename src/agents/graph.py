@@ -9,6 +9,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.types import Send
 
+from src.agents.extractor import extractor_node
 from src.agents.state import GraphState
 from src.schemas.claim import ClaimSchema
 from src.schemas.common import SessionStatus, UserLevel
@@ -134,7 +135,7 @@ def build_graph():
 
     builder.add_node("planner", planner_agent)
     builder.add_node("researcher", researcher_agent)
-    builder.add_node("extractor", extractor_agent)
+    builder.add_node("extractor", extractor_node)
     builder.add_node("fact_checker", fact_checker_agent)
     builder.add_node("reasoning", reasoning_agent)
     builder.add_node("teacher", teacher_agent)
@@ -181,7 +182,7 @@ if __name__ == "__main__":
     result = run_pipeline("What is RAG?", user_level="beginner")
 
     print("\n" + "=" * 60)
-    print("🚀 PIPELINE COMPLETE")
+    print("PIPELINE COMPLETE")
     print("=" * 60)
     print(f"Query: {result['query']}")
     print(f"Status: {result['status']}")
