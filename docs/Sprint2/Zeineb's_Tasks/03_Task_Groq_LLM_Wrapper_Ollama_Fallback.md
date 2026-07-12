@@ -35,7 +35,7 @@ Example:
 
 ```python
 response = LLMClient().generate(prompt)
-python```
+```
 Agents do not need to manage LLM provider logic.
 
 Primary LLM
