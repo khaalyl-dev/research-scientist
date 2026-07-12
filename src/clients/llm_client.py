@@ -1,12 +1,11 @@
 # src/clients/llm_client.py
 
-import os
 import logging
-from typing import Optional
+import os
 
+from langchain_core.messages import HumanMessage
 from langchain_groq import ChatGroq
 from langchain_ollama import ChatOllama
-from langchain_core.messages import HumanMessage
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +17,7 @@ class LLMClient:
         self.groq_api_key = os.getenv("GROQ_API_KEY")
         self.model = os.getenv("LLM_MODEL", "llama-3.1-70b-versatile")
         self.fallback_enabled = os.getenv("GROQ_FALLBACK", "ollama") == "ollama"
-        
+
         self._groq = None
         self._ollama = None
 
