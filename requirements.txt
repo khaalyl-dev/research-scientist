@@ -1,8 +1,9 @@
 
 # --- Backend & Agents ---
-langgraph==0.2.*
-langchain==0.3.*
-langchain-groq==0.2.*
+langgraph==1.0.*
+langchain==1.0.*
+langchain-core==1.0.*
+langchain-groq==1.0.*
 groq==0.9.*
 ollama==0.3.*
 tenacity==8.*
