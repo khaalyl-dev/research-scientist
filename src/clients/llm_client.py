@@ -47,7 +47,7 @@ class LLMClient:
             except Exception as e:
                 logger.warning(f"Groq failed: {e}")
                 logger.error(f"Groq failed with error: {e}")  # ← Add this line
-                logger.error(f"Groq error type: {type(e)}")   # ← Add this line
+                logger.error(f"Groq error type: {type(e)}")  # ← Add this line
 
         # Fallback to Ollama
         ollama = self._get_ollama()

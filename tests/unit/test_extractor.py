@@ -69,10 +69,10 @@ class TestExtractorNode:
     def test_handles_prose_wrapped_around_json(self):
         llm = FakeLLMClient(
             response=(
-    'Sure, here are the claims:\n'
-    '[{"entity": "X", "claim": "Y", "confidence": 0.6}]\n'
-    'Hope that helps!'
-)
+                "Sure, here are the claims:\n"
+                '[{"entity": "X", "claim": "Y", "confidence": 0.6}]\n'
+                "Hope that helps!"
+            )
         )
         result = extractor_node(make_send_state(), llm_client=llm)
         assert len(result["claims"]) == 1
