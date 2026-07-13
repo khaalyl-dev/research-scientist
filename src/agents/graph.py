@@ -121,16 +121,19 @@ def build_graph():
     return builder.compile(checkpointer=memory)
 
 
-def run_pipeline(query: str, user_level: str = "intermediate") -> dict:
-    """Run the full agent pipeline."""
-    # Create session in database
-    session_id = str(uuid.uuid4())
-    try:
-        create_session(session_id, query, user_level)
-    except Exception as e:
-        logger.warning(f"Failed to create session in database: {e}")
+# Ordered steps shown in the Streamlit Recherche progress UI (US-07).
+PIPELINE_AGENTS: list[tuple[str, str]] = [
+    ("planner", "Planner — décomposition en sous-requêtes"),
+    ("researcher", "Researcher — recherche de sources"),
+    ("extractor", "Extractor — extraction des claims"),
+    ("fact_checker", "FactChecker — détection de contradictions"),
+    ("reasoner", "Reasoning — synthèse"),
+    ("teacher", "Teacher — réponse personnalisée"),
+]
 
-    initial_state: GraphState = {
+
+def _build_initial_state(query: str, user_level: str, session_id: str) -> GraphState:
+    return {
         "query": query,
         "user_level": UserLevel(user_level),
         "session_id": session_id,
@@ -148,9 +151,72 @@ def run_pipeline(query: str, user_level: str = "intermediate") -> dict:
         "error": None,
     }
 
+
+def run_pipeline(query: str, user_level: str = "intermediate") -> dict:
+    """Run the full agent pipeline (blocking)."""
+    session_id = str(uuid.uuid4())
+    try:
+        create_session(session_id, query, user_level)
+    except Exception as e:
+        logger.warning(f"Failed to create session in database: {e}")
+
     graph = build_graph()
     config = {"configurable": {"thread_id": session_id}}
-    return graph.invoke(initial_state, config)
+    return graph.invoke(_build_initial_state(query, user_level, session_id), config)
+
+
+def stream_pipeline(query: str, user_level: str = "intermediate"):
+    """Yield per-agent updates for the Streamlit Recherche progress UI.
+
+    Yields dicts:
+      {"event": "start", "session_id": str, "agents": [...]}
+      {"event": "agent", "agent": str, "output": dict, "state": dict}
+      {"event": "done", "state": dict}
+      {"event": "error", "error": str, "state": dict | None}
+    """
+    session_id = str(uuid.uuid4())
+    try:
+        create_session(session_id, query, user_level)
+    except Exception as e:
+        logger.warning(f"Failed to create session in database: {e}")
+
+    initial_state = _build_initial_state(query, user_level, session_id)
+    graph = build_graph()
+    config = {"configurable": {"thread_id": session_id}}
+
+    yield {
+        "event": "start",
+        "session_id": session_id,
+        "agents": [a for a, _ in PIPELINE_AGENTS],
+    }
+
+    accumulated: dict = dict(initial_state)
+    try:
+        for update in graph.stream(initial_state, config, stream_mode="updates"):
+            # update = {node_name: partial_state_dict}
+            for agent_name, output in update.items():
+                partial = output if isinstance(output, dict) else {}
+                # claims use operator.add in GraphState — accumulate batches
+                # from parallel Extractor Send() branches instead of overwriting.
+                merged = {**accumulated, **partial}
+                if "claims" in partial:
+                    merged["claims"] = list(accumulated.get("claims") or []) + list(
+                        partial.get("claims") or []
+                    )
+                accumulated = merged
+                yield {
+                    "event": "agent",
+                    "agent": agent_name,
+                    "output": partial,
+                    "state": accumulated,
+                }
+
+        final_state = graph.get_state(config).values
+        yield {"event": "done", "state": dict(final_state)}
+    except Exception as e:
+        logger.exception("Pipeline stream failed")
+        yield {"event": "error", "error": str(e), "state": accumulated}
+
 
 
 if __name__ == "__main__":
