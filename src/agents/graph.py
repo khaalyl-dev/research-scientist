@@ -11,9 +11,13 @@ from langgraph.types import Send
 
 from src.agents.extractor import extractor_node
 from src.agents.state import GraphState
+from src.db.crud import create_session
 from src.schemas.claim import ClaimSchema
 from src.schemas.common import SessionStatus, UserLevel
 from src.schemas.source import SourceSchema
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 # ============================================================================
 # STUB AGENTS
@@ -156,10 +160,17 @@ def build_graph():
 
 def run_pipeline(query: str, user_level: str = "intermediate") -> dict:
     """Run the full agent pipeline."""
+    # Create session in database
+    session_id = str(uuid.uuid4())
+    try:
+        create_session(session_id, query, user_level)
+    except Exception as e:
+        logger.warning(f"Failed to create session in database: {e}")
+
     initial_state: GraphState = {
         "query": query,
         "user_level": UserLevel(user_level),
-        "session_id": str(uuid.uuid4()),
+        "session_id": session_id,
         "status": SessionStatus.running.value,
         "current_agent": "start",
         "retry_count": 0,
@@ -174,7 +185,7 @@ def run_pipeline(query: str, user_level: str = "intermediate") -> dict:
     }
 
     graph = build_graph()
-    config = {"configurable": {"thread_id": initial_state["session_id"]}}
+    config = {"configurable": {"thread_id": session_id}}
     return graph.invoke(initial_state, config)
 
 

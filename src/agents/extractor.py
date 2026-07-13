@@ -22,8 +22,10 @@ non-reducer field — this exact mistake is documented in Sprint 2 Task 1's
 import json
 import re
 
+
 from src.schemas.claim import ClaimSchema
 from src.utils.logger import get_logger
+from src.db.crud import save_claims
 
 logger = get_logger(__name__)
 
@@ -136,5 +138,12 @@ def extractor_node(state: dict, llm_client=None) -> dict:
 
     claims = _parse_claims(raw_response, source_id=source_id, source_url=source_url)
     logger.info(f"Extracted {len(claims)} claim(s) from source {source_id!r}")
+
+    # Save claims to SQLite
+    if claims:
+        try:
+            save_claims(state.get("session_id"), claims)
+        except Exception as e:
+            logger.warning(f"Failed to save claims to database: {e}")
 
     return {"claims": [c.model_dump() for c in claims]}
