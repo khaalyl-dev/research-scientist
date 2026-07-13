@@ -21,6 +21,10 @@ class SourceType(str, enum.Enum):
 
     arxiv = "arxiv"
     web = "web"
+    wikipedia = "wikipedia"
+    scholar = "scholar"  # Semantic Scholar (academic paper search)
+    openalex = "openalex"
+    pubmed = "pubmed"
 
 
 class SessionStatus(str, enum.Enum):

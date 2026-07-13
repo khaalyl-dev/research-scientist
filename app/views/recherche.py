@@ -309,9 +309,20 @@ def _render_saved_result(
 
     with st.expander(f"Sources ({len(sources)})", expanded=False):
         for src in sources:
-            title = src.get("title") if isinstance(src, dict) else getattr(src, "title", "Source")
-            url = src.get("url") if isinstance(src, dict) else getattr(src, "url", "")
-            st.markdown(f"- **{title}** — [{url}]({url})" if url else f"- **{title}**")
+            if isinstance(src, dict):
+                title = src.get("title") or "Source"
+                url = src.get("url") or ""
+                stype = src.get("source_type") or ""
+            else:
+                title = getattr(src, "title", "Source")
+                url = getattr(src, "url", "")
+                stype = getattr(src, "source_type", "")
+                if hasattr(stype, "value"):
+                    stype = stype.value
+            badge = f"`{stype}` " if stype else ""
+            st.markdown(
+                f"- {badge}**{title}** — [{url}]({url})" if url else f"- {badge}**{title}**"
+            )
 
     with st.expander(f"Claims ({len(claims)})", expanded=False):
         for claim in claims[:20]:

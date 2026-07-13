@@ -51,8 +51,8 @@ def render_accueil_page() -> None:
 <div class="ars-panel">
   <h3 class="ars-panel-title">Ce que tu obtiens</h3>
   <p class="ars-muted">
-    Sous-requêtes, sources arXiv / web, claims structurés, contradictions,
-    puis une réponse adaptée à ton niveau.
+    Sous-requêtes, sources arXiv / Scholar / Wikipedia / OpenAlex / PubMed / web,
+    claims structurés, contradictions, puis une réponse adaptée à ton niveau.
   </p>
   <ul style="margin:0;padding-left:1.1rem;color:#243944;line-height:1.6;">
     <li>Progression visible à chaque étape</li>
@@ -84,7 +84,8 @@ def render_accueil_page() -> None:
   <p class="ars-muted" style="margin:0;line-height:1.7;">
     LangGraph · Groq · Streamlit<br/>
     FAISS · SQLite · NetworkX<br/>
-    arXiv · Brave / DuckDuckGo
+    arXiv · Scholar · Wikipedia · OpenAlex · PubMed<br/>
+    Brave / DuckDuckGo
   </p>
 </div>
 """,

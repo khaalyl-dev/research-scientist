@@ -1,11 +1,7 @@
 """
 Unit tests for src/agents/researcher.py.
 
-All three external dependencies (arXiv client, scraper, web search) are
-injected as fakes — see researcher_node's arxiv_client/scraper/web_search_fn
-parameters. Zero real network calls, zero dependency on Khalil's actual
-client files being present or on his exact internal implementation, only
-on the interface contract documented at the top of researcher.py.
+External clients are injected as fakes — zero real network calls.
 """
 
 import uuid
@@ -18,9 +14,6 @@ from src.schemas.source import SourceSchema
 
 
 def make_state(session_id: str, query: str, user_level: UserLevel) -> GraphState:
-    """Test-only factory matching the approved GraphState contract exactly
-    (src/agents/state.py, approved proposal). Not a production helper —
-    state.py stays exactly as approved, with no additions."""
     return {
         "query": query,
         "user_level": user_level,
@@ -40,8 +33,8 @@ def make_state(session_id: str, query: str, user_level: UserLevel) -> GraphState
     }
 
 
-class FakeArxivClient:
-    """Fake matching ArxivClient.search(query, max_results) -> list[SourceSchema]."""
+class FakeSearchClient:
+    """Fake matching *.search(query, max_results) -> list[SourceSchema]."""
 
     def __init__(self, sources_by_query: dict | None = None, raise_exc: Exception | None = None):
         self._sources_by_query = sources_by_query or {}
@@ -55,9 +48,10 @@ class FakeArxivClient:
         return self._sources_by_query.get(query, [])[:max_results]
 
 
-class FakeScraper:
-    """Fake matching WebScraper.fetch(url) -> SourceSchema | None."""
+FakeArxivClient = FakeSearchClient
 
+
+class FakeScraper:
     def __init__(self, fail_urls: set[str] | None = None, raise_on: set[str] | None = None):
         self._fail_urls = fail_urls or set()
         self._raise_on = raise_on or set()
@@ -70,7 +64,7 @@ class FakeScraper:
         if url in self._fail_urls:
             return None
         return SourceSchema(
-            id=str(uuid.uuid4()),  # ← ADD THIS!
+            id=str(uuid.uuid4()),
             source_type=SourceType.web,
             title=f"scraped: {url}",
             url=url,
@@ -78,15 +72,27 @@ class FakeScraper:
         )
 
 
-def make_arxiv_source(query: str, suffix: str = "1") -> SourceSchema:
+def make_source(query: str, source_type: SourceType, suffix: str = "1") -> SourceSchema:
+    host = {
+        SourceType.arxiv: "arxiv.org/abs",
+        SourceType.web: "example.com",
+        SourceType.wikipedia: "en.wikipedia.org/wiki",
+        SourceType.scholar: "semanticscholar.org/paper",
+        SourceType.openalex: "openalex.org/works",
+        SourceType.pubmed: "pubmed.ncbi.nlm.nih.gov",
+    }[source_type]
     return SourceSchema(
-        id=str(uuid.uuid4()),  # ← ADD THIS!
-        source_type=SourceType.arxiv,
-        title=f"arXiv result for {query}",
-        url=f"https://arxiv.org/abs/{suffix}",
-        content="abstract content",
+        id=str(uuid.uuid4()),
+        source_type=source_type,
+        title=f"{source_type.value} result for {query}",
+        url=f"https://{host}/{suffix}",
+        content="content body",
         published_year=2025,
     )
+
+
+def make_arxiv_source(query: str, suffix: str = "1") -> SourceSchema:
+    return make_source(query, SourceType.arxiv, suffix)
 
 
 def make_web_search_fn(hits_by_query: dict):
@@ -96,7 +102,13 @@ def make_web_search_fn(hits_by_query: dict):
     return fake_web_search
 
 
-# ---------------------------------------------------------------------------
+def _empty_extras():
+    return {
+        "wikipedia_client": FakeSearchClient(),
+        "scholar_client": FakeSearchClient(),
+        "openalex_client": FakeSearchClient(),
+        "pubmed_client": FakeSearchClient(),
+    }
 
 
 class TestResearcherNode:
@@ -115,12 +127,45 @@ class TestResearcherNode:
             arxiv_client=arxiv,
             scraper=FakeScraper(),
             web_search_fn=make_web_search_fn(hits),
+            **_empty_extras(),
         )
 
         assert len(result["sources"]) == 2
         types = {s.source_type for s in result["sources"]}
         assert types == {SourceType.arxiv, SourceType.web}
         assert result["current_agent"] == "researcher"
+        assert result["error"] is None
+
+    async def test_aggregates_new_providers(self):
+        state = make_state("s1", "q", UserLevel.beginner)
+        state["sub_queries"] = ["RAG"]
+
+        result = await researcher_node(
+            state,
+            arxiv_client=FakeSearchClient(),
+            scraper=FakeScraper(),
+            web_search_fn=make_web_search_fn({}),
+            wikipedia_client=FakeSearchClient(
+                {"RAG": [make_source("RAG", SourceType.wikipedia, "RAG")]}
+            ),
+            scholar_client=FakeSearchClient(
+                {"RAG": [make_source("RAG", SourceType.scholar, "abc")]}
+            ),
+            openalex_client=FakeSearchClient(
+                {"RAG": [make_source("RAG", SourceType.openalex, "W1")]}
+            ),
+            pubmed_client=FakeSearchClient(
+                {"RAG": [make_source("RAG", SourceType.pubmed, "123")]}
+            ),
+        )
+
+        types = {s.source_type for s in result["sources"]}
+        assert types == {
+            SourceType.wikipedia,
+            SourceType.scholar,
+            SourceType.openalex,
+            SourceType.pubmed,
+        }
         assert result["error"] is None
 
     async def test_runs_all_subqueries(self):
@@ -135,19 +180,27 @@ class TestResearcherNode:
             }
         )
         result = await researcher_node(
-            state, arxiv_client=arxiv, scraper=FakeScraper(), web_search_fn=make_web_search_fn({})
+            state,
+            arxiv_client=arxiv,
+            scraper=FakeScraper(),
+            web_search_fn=make_web_search_fn({}),
+            **_empty_extras(),
         )
 
-        assert len(arxiv.calls) == 3  # one arXiv call per sub-query
+        assert len(arxiv.calls) == 3
         assert len(result["sources"]) == 3
 
     async def test_falls_back_to_main_query_when_no_subqueries(self):
         state = make_state("s1", "main question", UserLevel.beginner)
-        state["sub_queries"] = []  # Planner hasn't run / produced nothing
+        state["sub_queries"] = []
 
         arxiv = FakeArxivClient({"main question": [make_arxiv_source("main question")]})
         result = await researcher_node(
-            state, arxiv_client=arxiv, scraper=FakeScraper(), web_search_fn=make_web_search_fn({})
+            state,
+            arxiv_client=arxiv,
+            scraper=FakeScraper(),
+            web_search_fn=make_web_search_fn({}),
+            **_empty_extras(),
         )
 
         assert arxiv.calls == [("main question", 2)]
@@ -157,12 +210,15 @@ class TestResearcherNode:
         state = make_state("s1", "q", UserLevel.beginner)
         state["sub_queries"] = ["sub-a", "sub-b"]
 
-        # Same arXiv paper surfaces for both sub-queries
         same_source = make_arxiv_source("dup", "same-id")
         arxiv = FakeArxivClient({"sub-a": [same_source], "sub-b": [same_source]})
 
         result = await researcher_node(
-            state, arxiv_client=arxiv, scraper=FakeScraper(), web_search_fn=make_web_search_fn({})
+            state,
+            arxiv_client=arxiv,
+            scraper=FakeScraper(),
+            web_search_fn=make_web_search_fn({}),
+            **_empty_extras(),
         )
 
         assert len(result["sources"]) == 1
@@ -184,6 +240,7 @@ class TestResearcherNode:
             arxiv_client=FakeArxivClient(),
             scraper=scraper,
             web_search_fn=make_web_search_fn(hits),
+            **_empty_extras(),
         )
 
         assert len(result["sources"]) == 1
@@ -206,9 +263,10 @@ class TestResearcherNode:
             arxiv_client=FakeArxivClient(),
             scraper=scraper,
             web_search_fn=make_web_search_fn(hits),
+            **_empty_extras(),
         )
 
-        assert len(result["sources"]) == 1  # the good one survives
+        assert len(result["sources"]) == 1
 
     async def test_arxiv_exception_does_not_crash_web_branch(self):
         state = make_state("s1", "q", UserLevel.beginner)
@@ -221,11 +279,35 @@ class TestResearcherNode:
         arxiv = FakeArxivClient(raise_exc=RuntimeError("arXiv API down"))
 
         result = await researcher_node(
-            state, arxiv_client=arxiv, scraper=FakeScraper(), web_search_fn=make_web_search_fn(hits)
+            state,
+            arxiv_client=arxiv,
+            scraper=FakeScraper(),
+            web_search_fn=make_web_search_fn(hits),
+            **_empty_extras(),
         )
 
         assert len(result["sources"]) == 1
         assert result["sources"][0].source_type == SourceType.web
+
+    async def test_provider_exception_does_not_crash_others(self):
+        state = make_state("s1", "q", UserLevel.beginner)
+        state["sub_queries"] = ["sub-a"]
+
+        result = await researcher_node(
+            state,
+            arxiv_client=FakeSearchClient(
+                {"sub-a": [make_arxiv_source("sub-a")]}
+            ),
+            scraper=FakeScraper(),
+            web_search_fn=make_web_search_fn({}),
+            wikipedia_client=FakeSearchClient(raise_exc=RuntimeError("wiki down")),
+            scholar_client=FakeSearchClient(),
+            openalex_client=FakeSearchClient(),
+            pubmed_client=FakeSearchClient(),
+        )
+
+        assert len(result["sources"]) == 1
+        assert result["sources"][0].source_type == SourceType.arxiv
 
     async def test_zero_sources_populates_errors_not_exception(self):
         state = make_state("s1", "obscure query", UserLevel.beginner)
@@ -236,6 +318,7 @@ class TestResearcherNode:
             arxiv_client=FakeArxivClient(),
             scraper=FakeScraper(),
             web_search_fn=make_web_search_fn({}),
+            **_empty_extras(),
         )
 
         assert result["sources"] == []
@@ -244,13 +327,17 @@ class TestResearcherNode:
 
     async def test_caps_total_sources_at_max(self):
         state = make_state("s1", "q", UserLevel.beginner)
-        state["sub_queries"] = [f"sub-{i}" for i in range(10)]  # way more than MAX_TOTAL_SOURCES
+        state["sub_queries"] = [f"sub-{i}" for i in range(10)]
 
         arxiv_sources = {f"sub-{i}": [make_arxiv_source(f"sub-{i}", str(i))] for i in range(10)}
         arxiv = FakeArxivClient(arxiv_sources)
 
         result = await researcher_node(
-            state, arxiv_client=arxiv, scraper=FakeScraper(), web_search_fn=make_web_search_fn({})
+            state,
+            arxiv_client=arxiv,
+            scraper=FakeScraper(),
+            web_search_fn=make_web_search_fn({}),
+            **_empty_extras(),
         )
 
         from src.agents.researcher import MAX_TOTAL_SOURCES

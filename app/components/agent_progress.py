@@ -113,17 +113,34 @@ def build_agent_narrative(
     if agent == "researcher":
         sources = state.get("sources") or []
         lines = [f"### {title}\n", f"**{len(sources)}** source(s) récupérée(s).\n\n"]
+        type_counts: dict[str, int] = {}
+        for src in sources:
+            if isinstance(src, dict):
+                stype = str(src.get("source_type") or "web")
+            else:
+                stype = str(getattr(src, "source_type", "web"))
+                if hasattr(stype, "value"):
+                    stype = stype.value
+            type_counts[stype] = type_counts.get(stype, 0) + 1
+        if type_counts:
+            breakdown = ", ".join(f"{k}×{v}" for k, v in sorted(type_counts.items()))
+            lines.append(f"Répartition : `{breakdown}`\n\n")
         for src in sources[:5]:
             if isinstance(src, dict):
                 name = src.get("title") or src.get("url") or "Source"
                 url = src.get("url") or ""
+                stype = src.get("source_type") or ""
             else:
                 name = getattr(src, "title", "Source")
                 url = getattr(src, "url", "")
+                stype = getattr(src, "source_type", "")
+                if hasattr(stype, "value"):
+                    stype = stype.value
+            prefix = f"`{stype}` " if stype else ""
             if url:
-                lines.append(f"- [{name}]({url})\n")
+                lines.append(f"- {prefix}[{name}]({url})\n")
             else:
-                lines.append(f"- {name}\n")
+                lines.append(f"- {prefix}{name}\n")
         if len(sources) > 5:
             lines.append(f"\n_… et {len(sources) - 5} autres._\n")
         if state.get("error"):

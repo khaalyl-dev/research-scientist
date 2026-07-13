@@ -25,7 +25,7 @@ logger = get_logger(__name__)
 
 
 async def researcher_agent(state: GraphState) -> dict:
-    """Real Researcher — arXiv + web in parallel; sources stored as dicts."""
+    """Real Researcher — arXiv/web/wiki/scholar/OpenAlex/PubMed; sources as dicts."""
     result = await researcher_node(state)
     sources = result.get("sources") or []
     result["sources"] = [

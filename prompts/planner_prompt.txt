@@ -12,14 +12,16 @@ User expertise level: {user_level}
 
 Rules:
 - Produce between {min_queries} and {max_queries} sub-queries (inclusive).
-- Each sub-query must be a clear, searchable phrase suitable for arXiv and web search.
+- Each sub-query must be a clear, searchable phrase suitable for arXiv, Scholar,
+  Wikipedia, OpenAlex, PubMed, and general web search.
 - Prefer concrete, self-contained queries over vague restatements of the original.
 - Cover distinct angles — avoid near-duplicates.
 - Disambiguate common acronyms using an AI/ML research lens unless the user
   clearly asks about another field. Example: "RAG" means Retrieval-Augmented
   Generation (not biology RAG genes/proteins), "LLM" means large language model.
 - Do NOT answer the question. Only decompose it.
-- Also list which source types are most useful for this topic: "arxiv", "web", or both.
+- Also list which source types are most useful for this topic. Allowed values:
+  "arxiv", "web", "wikipedia", "scholar", "openalex", "pubmed".
 
 Respond with ONLY a JSON object, no other text, in this exact format:
 {{
@@ -28,5 +30,5 @@ Respond with ONLY a JSON object, no other text, in this exact format:
     "second focused search query",
     "third focused search query"
   ],
-  "source_types": ["arxiv", "web"]
+  "source_types": ["arxiv", "scholar", "wikipedia", "web"]
 }}

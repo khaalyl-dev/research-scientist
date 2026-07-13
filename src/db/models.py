@@ -93,7 +93,16 @@ class Source(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id"), nullable=False)
 
-    source_type: Mapped[SourceType] = mapped_column(Enum(SourceType), nullable=False)
+    # native_enum=False → VARCHAR on SQLite so new SourceType values don't
+    # require a brittle CHECK-constraint rewrite on every provider add.
+    source_type: Mapped[SourceType] = mapped_column(
+        Enum(
+            SourceType,
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+            native_enum=False,
+        ),
+        nullable=False,
+    )
     title: Mapped[str] = mapped_column(Text, nullable=False)
     url: Mapped[str] = mapped_column(String(2048), nullable=False)
 
