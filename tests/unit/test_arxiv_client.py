@@ -77,9 +77,7 @@ def test_search_degrades_gracefully_on_api_failure(client, mocker):
     # Bypass tenacity's real retry/backoff sleeping by mocking the
     # retry-wrapped method directly — we're testing search()'s error
     # handling here, not tenacity's own retry mechanics.
-    mocker.patch.object(
-        client, "_search_with_retry", side_effect=RuntimeError("arXiv is down")
-    )
+    mocker.patch.object(client, "_search_with_retry", side_effect=RuntimeError("arXiv is down"))
 
     result = client.search("anything")
 

@@ -1,51 +1,38 @@
 """
-Retry utilities with exponential backoff.
+Shared retry decorator — implements the plan's error-handling strategy
+(section 2 / section 9): "Retry exponentiel + fallback + dégradation gracieuse".
 
-Provides a decorator for retrying functions that may fail transiently.
+3 attempts, exponential backoff. Used by every external API client (arXiv,
+Brave Search, and later the LLM wrapper) so retry behavior is consistent
+and defined in exactly one place.
+
+Deliberately generic over exception types: each client passes in which
+exceptions are worth retrying (e.g. timeouts, 5xx) vs which should fail fast
+(e.g. a 401 bad API key — retrying that 3 times just wastes 7 seconds before
+failing anyway).
 """
 
-import time
-import logging
-from functools import wraps
-from typing import Callable, Type, Tuple
+from typing import Type
 
-logger = logging.getLogger(__name__)
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 
-def retry_with_backoff(
-    max_attempts: int = 3,
-    backoff_factor: float = 1.0,
-    exceptions: Tuple[Type[Exception], ...] = (Exception,),
-):
+def with_retry(*retryable_exceptions: Type[Exception]):
+    """Decorator factory: 3 attempts, exponential backoff starting at 1s
+    (1s, 2s, 4s), only retrying the given exception types.
+
+    Usage:
+        @with_retry(httpx.TimeoutException, httpx.ConnectError)
+        async def call_api(...): ...
     """
-    Decorator that retries a function with exponential backoff.
-
-    Args:
-        max_attempts: Maximum number of attempts (including first)
-        backoff_factor: Base wait time (doubles each retry)
-        exceptions: Tuple of exception types to retry on
-
-    Example:
-        @retry_with_backoff(max_attempts=3)
-        def call_api():
-            ...
-    """
-    def decorator(func: Callable):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            for attempt in range(1, max_attempts + 1):
-                try:
-                    return func(*args, **kwargs)
-                except exceptions as e:
-                    if attempt == max_attempts:
-                        logger.error(f"All {max_attempts} attempts failed: {e}")
-                        raise
-                    wait_time = backoff_factor * (2 ** (attempt - 1))
-                    logger.warning(
-                        f"Attempt {attempt} failed: {e}. "
-                        f"Retrying in {wait_time:.2f}s..."
-                    )
-                    time.sleep(wait_time)
-            return None
-        return wrapper
-    return decorator
+    return retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type(retryable_exceptions),
+        reraise=True,  # after 3 failed attempts, raise the real exception
+    )

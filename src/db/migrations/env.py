@@ -3,11 +3,9 @@ import sys
 from logging.config import fileConfig
 from pathlib import Path
 
-from dotenv import load_dotenv
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-
 from alembic import context
+from dotenv import load_dotenv
+from sqlalchemy import engine_from_config, pool
 
 # Make `src.*` importable when Alembic is invoked from the project root
 # (which is how we'll always run it: `alembic upgrade head`).

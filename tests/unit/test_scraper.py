@@ -20,7 +20,6 @@ from src.clients.scraper import WebScraper
 from src.schemas.common import SourceType
 from src.schemas.source import SourceSchema
 
-
 LONG_PARAGRAPH = "This is a long article paragraph. " * 10  # > 100 chars
 
 
@@ -56,7 +55,10 @@ def no_real_sleep(mocker):
 # fetch() — happy path
 # --------------------------------------------------------------------- #
 def test_fetch_returns_source_on_success(scraper, mocker):
-    html = f"<html><head><title>My Article</title></head><body><article><p>{LONG_PARAGRAPH}</p></article></body></html>"
+    html = (
+        f"<html><head><title>My Article</title></head>"
+        f"<body><article><p>{LONG_PARAGRAPH}</p></article></body></html>"
+    )
     mocker.patch.object(scraper._session, "get", return_value=make_response(html))
 
     source = scraper.fetch("https://example.com/article")

@@ -36,6 +36,7 @@ st.set_page_config(
     layout="wide",
 )
 
+
 # Cached clients so we don't reinstantiate a requests.Session / arxiv.Client
 # on every rerun (Streamlit reruns the whole script on each interaction).
 @st.cache_resource
@@ -64,10 +65,12 @@ with st.sidebar:
     st.caption("MVP — Sprint 1: plumbing only, no agents yet.")
     st.divider()
     st.markdown("**Roadmap**")
-    st.markdown("- ✅ Sprint 1 — Sources brutes\n"
-                "- ⏳ Sprint 2 — Agents + FAISS\n"
-                "- ⏳ Sprint 3 — Contradictions + Graphe\n"
-                "- ⏳ Sprint 4 — Finalisation")
+    st.markdown(
+        "- ✅ Sprint 1 — Sources brutes\n"
+        "- ⏳ Sprint 2 — Agents + FAISS\n"
+        "- ⏳ Sprint 3 — Contradictions + Graphe\n"
+        "- ⏳ Sprint 4 — Finalisation"
+    )
 
 # --------------------------------------------------------------------- #
 # Main content
@@ -112,8 +115,10 @@ if submitted:
                 "ou réessaie avec une autre requête."
             )
         else:
-            st.success(f"{len(all_sources)} source(s) trouvée(s) en {elapsed:.1f}s "
-                       f"(niveau sélectionné : {level})")
+            st.success(
+                f"{len(all_sources)} source(s) trouvée(s) en {elapsed:.1f}s "
+                f"(niveau sélectionné : {level})"
+            )
 
             tab_arxiv, tab_web = st.tabs(
                 [f"📄 arXiv ({len(arxiv_sources)})", f"🌐 Web ({len(web_sources)})"]
@@ -143,5 +148,7 @@ if submitted:
                         preview = src.content[:600]
                         st.write(preview + ("..." if len(src.content) > 600 else ""))
 else:
-    st.info("👆 Entre une question ci-dessus pour voir les sources brutes remontées "
-            "par le client arXiv et le scraper BeautifulSoup.")
+    st.info(
+        "👆 Entre une question ci-dessus pour voir les sources brutes remontées "
+        "par le client arXiv et le scraper BeautifulSoup."
+    )
