@@ -8,11 +8,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from sqlalchemy.orm import Session
-
 from src.db.database import get_db_session
-from src.db.models import ResearchSession, Source, Claim, Contradiction
-from src.schemas.common import SessionStatus, SourceType
+from src.db.models import Claim, Contradiction, ResearchSession, Source
 from src.schemas.claim import ClaimSchema
 from src.schemas.source import SourceSchema
 
