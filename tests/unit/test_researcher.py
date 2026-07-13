@@ -29,6 +29,7 @@ def make_state(session_id: str, query: str, user_level: UserLevel) -> GraphState
         "current_agent": "start",
         "retry_count": 0,
         "sub_queries": [],
+        "source_types": [],
         "sources": [],
         "claims": [],
         "contradictions": [],

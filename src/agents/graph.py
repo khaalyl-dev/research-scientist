@@ -10,9 +10,9 @@ from langgraph.graph import END, StateGraph
 from langgraph.types import Send
 
 from src.agents.extractor import extractor_node
+from src.agents.planner import planner_node
 from src.agents.state import GraphState
 from src.db.crud import create_session
-from src.schemas.claim import ClaimSchema
 from src.schemas.common import SessionStatus, UserLevel
 from src.schemas.source import SourceSchema
 from src.utils.logger import get_logger
@@ -20,25 +20,8 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 # ============================================================================
-# STUB AGENTS
+# STUB AGENTS (Planner is real — see planner.py)
 # ============================================================================
-
-
-def planner_agent(state: GraphState) -> dict:
-    """Stub Planner - decomposes query into sub-queries."""
-    print(f"[Planner] Processing: {state['query']}")
-
-    sub_queries = [
-        f"{state['query']} - overview",
-        f"{state['query']} - key concepts",
-        f"{state['query']} - applications",
-    ]
-
-    return {
-        "sub_queries": sub_queries,
-        "current_agent": "planner",
-        "status": SessionStatus.running.value,
-    }
 
 
 def researcher_agent(state: GraphState) -> dict:
@@ -61,26 +44,6 @@ def researcher_agent(state: GraphState) -> dict:
         "sources": sources,
         "current_agent": "researcher",
     }
-
-
-def extractor_agent(state: dict) -> dict:
-    """Stub Extractor - extracts claims from a source."""
-    source = state.get("source")
-    print(f"[Extractor] Processing: {source['title'] if source else 'unknown'}")
-
-    claims = [
-        ClaimSchema(
-            id=str(uuid.uuid4()),
-            source_id=source["id"] if source else str(uuid.uuid4()),
-            source_url=source["url"] if source else "",
-            entity=f"Concept_{i}",
-            claim=f"Claim {i} about {source['title'] if source else 'unknown'}",
-            confidence=0.85 + (i * 0.05),
-        ).model_dump()
-        for i in range(2)
-    ]
-
-    return {"claims": claims}
 
 
 def create_extraction_jobs(state: GraphState) -> List[Send]:
@@ -137,11 +100,11 @@ def build_graph():
     """Build the LangGraph pipeline."""
     builder = StateGraph(GraphState)
 
-    builder.add_node("planner", planner_agent)
+    builder.add_node("planner", planner_node)
     builder.add_node("researcher", researcher_agent)
     builder.add_node("extractor", extractor_node)
     builder.add_node("fact_checker", fact_checker_agent)
-    builder.add_node("reasoning", reasoning_agent)
+    builder.add_node("reasoner", reasoning_agent)
     builder.add_node("teacher", teacher_agent)
 
     builder.set_entry_point("planner")
@@ -150,8 +113,8 @@ def build_graph():
     builder.add_conditional_edges("researcher", create_extraction_jobs, ["extractor"])
 
     builder.add_edge("extractor", "fact_checker")
-    builder.add_edge("fact_checker", "reasoning")
-    builder.add_edge("reasoning", "teacher")
+    builder.add_edge("fact_checker", "reasoner")
+    builder.add_edge("reasoner", "teacher")
     builder.add_edge("teacher", END)
 
     memory = MemorySaver()
@@ -175,6 +138,7 @@ def run_pipeline(query: str, user_level: str = "intermediate") -> dict:
         "current_agent": "start",
         "retry_count": 0,
         "sub_queries": [],
+        "source_types": [],
         "sources": [],
         "claims": [],
         "contradictions": [],
@@ -197,5 +161,6 @@ if __name__ == "__main__":
     print("=" * 60)
     print(f"Query: {result['query']}")
     print(f"Status: {result['status']}")
+    print(f"Sub-queries: {result.get('sub_queries', [])}")
     print(f"Sources: {len(result.get('sources', []))}")
     print(f"Claims: {len(result.get('claims', []))}")

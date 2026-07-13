@@ -29,6 +29,7 @@ class GraphState(TypedDict):
 
     # --- Planner output ---
     sub_queries: list[str]
+    source_types: list[str]  # preferred SourceType values, e.g. ["arxiv", "web"]
 
     # --- Researcher output ---
     sources: list[SourceSchema]

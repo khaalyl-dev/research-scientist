@@ -1,13 +1,9 @@
 """
-Streamlit base UI — Task: "Streamlit base UI" (US-01, Sprint 1, Khalil+Zeineb)
+Streamlit UI — US-01 + US-02 (Planner sub-queries).
 
-Sprint 1 goal (per MVP_Plan_Final.pdf): "On peut lancer l'application
-Streamlit, entrer une requete, et voir les sources brutes remontees
-depuis arXiv et Brave Search - sans agents, juste le plumbing."
-
-This file intentionally does NOT call any LangGraph agents yet — that's
-Sprint 2. It wires the two Sprint-1 clients (arXiv + scraper) directly
-to the UI so the team has an end-to-end, demoable skeleton today.
+Sprint 1 plumbing (arXiv + scraper) plus Sprint 2 Planner decomposition:
+the user's question is split into 3–5 sub-queries shown in an expander
+before sources are fetched.
 
 Run with:
     streamlit run app/main.py
@@ -24,8 +20,10 @@ import streamlit as st
 # Allow `from src...` imports when running via `streamlit run app/main.py`
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from src.agents.planner import planner_node
 from src.clients.arxiv_client import ArxivClient
 from src.clients.scraper import WebScraper
+from src.schemas.common import UserLevel
 
 # --------------------------------------------------------------------- #
 # Page config
@@ -35,6 +33,12 @@ st.set_page_config(
     page_icon="🔬",
     layout="wide",
 )
+
+_LEVEL_MAP = {
+    "Débutant": UserLevel.beginner,
+    "Intermédiaire": UserLevel.intermediate,
+    "Expert": UserLevel.expert,
+}
 
 
 # Cached clients so we don't reinstantiate a requests.Session / arxiv.Client
@@ -62,7 +66,7 @@ _DEMO_WEB_SOURCES = [
 # --------------------------------------------------------------------- #
 with st.sidebar:
     st.title("🔬 Research Scientist")
-    st.caption("MVP — Sprint 1: plumbing only, no agents yet.")
+    st.caption("MVP — Sprint 2: Planner agent wired.")
     st.divider()
     st.markdown("**Roadmap**")
     st.markdown(
@@ -96,8 +100,44 @@ if submitted:
         st.warning("Merci d'entrer une question avant de lancer la recherche.")
     else:
         start = time.monotonic()
+        user_level = _LEVEL_MAP[level]
+
+        with st.spinner("Planner — décomposition en sous-requêtes..."):
+            plan = planner_node(
+                {
+                    "query": query.strip(),
+                    "user_level": user_level,
+                    "session_id": None,
+                    "sub_queries": [],
+                    "source_types": [],
+                }
+            )
+            sub_queries = plan.get("sub_queries", [])
+            source_types = plan.get("source_types", [])
+
+        # US-02: sub-queries visible in an expander
+        with st.expander(
+            f"🧩 Sous-requêtes du Planner ({len(sub_queries)})",
+            expanded=True,
+        ):
+            for i, sq in enumerate(sub_queries, start=1):
+                st.markdown(f"{i}. {sq}")
+            if source_types:
+                st.caption(f"Sources privilégiées : {', '.join(source_types)}")
+
         with st.spinner("Recherche des sources en cours..."):
-            arxiv_sources = get_arxiv_client().search(query, max_results=max_results)
+            # Search with the original query plus each Planner sub-query (capped)
+            search_queries = [query.strip(), *sub_queries][:4]
+            arxiv_sources = []
+            seen_urls: set[str] = set()
+            for sq in search_queries:
+                for src in get_arxiv_client().search(sq, max_results=max(2, max_results // 2)):
+                    if src.url not in seen_urls:
+                        seen_urls.add(src.url)
+                        arxiv_sources.append(src)
+                if len(arxiv_sources) >= max_results:
+                    break
+            arxiv_sources = arxiv_sources[:max_results]
 
             scraper = get_scraper()
             web_sources = []

@@ -4,6 +4,7 @@ CRUD operations for the database.
 Provides functions to save sessions, sources, and claims.
 """
 
+import json
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -43,6 +44,15 @@ def update_session_status(session_id: str, status: str) -> None:
             session.status = status
             if status == "completed":
                 session.completed_at = datetime.now(timezone.utc)
+            db.commit()
+
+
+def save_sub_queries(session_id: str, sub_queries: List[str]) -> None:
+    """Persist Planner sub-queries on the session row (US-02)."""
+    with get_db_session() as db:
+        session = db.query(ResearchSession).filter_by(id=session_id).first()
+        if session:
+            session.sub_queries = json.dumps(sub_queries, ensure_ascii=False)
             db.commit()
 
 

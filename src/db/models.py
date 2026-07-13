@@ -65,6 +65,9 @@ class ResearchSession(Base):
     # Filled in once the pipeline finishes (Teacher agent's output, US-06)
     final_response: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # JSON array of Planner sub-queries (US-02) — stored as text for SQLite portability
+    sub_queries: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Filled in by the Research Notebook feature (section 12)
     evidence_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
