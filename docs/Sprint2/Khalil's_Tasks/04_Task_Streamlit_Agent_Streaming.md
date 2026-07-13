@@ -46,7 +46,7 @@ US-07 explicitly asks for `st.write_stream()` and *no blank page > 5 seconds*. P
 | File | Action | Description |
 |------|--------|-------------|
 | `app/components/agent_progress.py` | Extended | `build_agent_narrative`, `stream_agent_text`, `stream_lines` |
-| `app/pages/recherche.py` | Modified | Live “Flux agent par agent” with per-agent `write_stream` |
+| `app/views/recherche.py` | Modified | Live “Flux agent par agent” with per-agent `write_stream` |
 | `tests/unit/test_agent_streaming.py` | Created | Narrative + stream helper unit tests |
 | `docs/Sprint2/Khalil's_Tasks/04_Task_Streamlit_Agent_Streaming.md` | Created | This document |
 

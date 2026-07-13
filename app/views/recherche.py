@@ -34,12 +34,47 @@ _LEVEL_TO_VALUE = {
 _AGENT_LABELS = {agent_id: label for agent_id, label in PIPELINE_AGENTS}
 
 
+def _llm_status_message() -> str | None:
+    """Return a user-facing warning if no LLM backend looks usable."""
+    import os
+
+    key = (os.getenv("GROQ_API_KEY") or "").strip()
+    if key.startswith("xai-"):
+        return (
+            "⚠️ Your `.env` has an **xAI / Grok** key (`xai-...`), but this app uses "
+            "**Groq** (`https://console.groq.com`). Create a Groq key that starts with "
+            "`gsk_`, put it in `GROQ_API_KEY`, then restart Streamlit."
+        )
+    if key and not key.startswith("gsk_"):
+        return (
+            "⚠️ `GROQ_API_KEY` does not look like a Groq key (expected prefix `gsk_`). "
+            "Get one at https://console.groq.com — not xAI/Grok."
+        )
+    if key:
+        return None
+    fallback = os.getenv("GROQ_FALLBACK", "ollama") == "ollama"
+    if fallback:
+        return (
+            "⚠️ `GROQ_API_KEY` is empty in `.env`, and Ollama will be used as fallback. "
+            "If Ollama is not running (`ollama serve`), Planner/Extractor will degrade "
+            "(heuristic sub-queries, 0 claims)."
+        )
+    return (
+        "⚠️ `GROQ_API_KEY` is empty and Ollama fallback is disabled. "
+        "Set the key in `.env` and restart Streamlit."
+    )
+
+
 def render_recherche_page() -> None:
     st.title("🔍 Recherche")
     st.caption(
         "Pose une question — progression + streaming de la réponse "
         "agent par agent (Planner → Teacher)."
     )
+
+    llm_warn = _llm_status_message()
+    if llm_warn:
+        st.warning(llm_warn)
 
     with st.form("recherche_form"):
         col1, col2 = st.columns([4, 1])
@@ -240,3 +275,10 @@ def _render_saved_result(
 
     if state.get("error"):
         st.warning(f"Avertissement pipeline : {state['error']}")
+
+    if len(claims) == 0 and len(sources) > 0:
+        st.info(
+            "0 claims extraits alors que des sources existent — en général le LLM "
+            "était indisponible (GROQ_API_KEY vide et/ou Ollama arrêté). "
+            "Remplis `.env` puis relance Streamlit, ou démarre `ollama serve`."
+        )

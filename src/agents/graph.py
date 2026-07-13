@@ -11,39 +11,46 @@ from langgraph.types import Send
 
 from src.agents.extractor import extractor_node
 from src.agents.planner import planner_node
+from src.agents.researcher import researcher_node
 from src.agents.state import GraphState
 from src.db.crud import create_session
 from src.schemas.common import SessionStatus, UserLevel
-from src.schemas.source import SourceSchema
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 # ============================================================================
-# STUB AGENTS (Planner is real — see planner.py)
+# AGENTS (stubs remain for FactChecker / Reasoning / Teacher)
 # ============================================================================
 
 
-def researcher_agent(state: GraphState) -> dict:
-    """Stub Researcher - searches for sources."""
-    print(f"[Researcher] Searching for: {state['sub_queries']}")
-
-    sources = [
-        SourceSchema(
-            id=str(uuid.uuid4()),
-            url=f"https://example.com/source_{i}",
-            title=f"Source {i} about {state['query']}",
-            source_type="arxiv",
-            published_year=2024,
-            content=f"Dummy content for source {i}.",
-        ).model_dump()
-        for i in range(3)
+async def researcher_agent(state: GraphState) -> dict:
+    """Real Researcher — arXiv + web in parallel; sources stored as dicts."""
+    result = await researcher_node(state)
+    sources = result.get("sources") or []
+    result["sources"] = [
+        s.model_dump() if hasattr(s, "model_dump") else s for s in sources
     ]
+    logger.info(
+        f"Researcher returned {len(result['sources'])} source(s) "
+        f"for {len(state.get('sub_queries') or [])} sub-quer(y/ies)"
+    )
+    return result
 
-    return {
-        "sources": sources,
-        "current_agent": "researcher",
-    }
+
+def _sync_researcher_agent(state: GraphState) -> dict:
+    """Sync entrypoint for LangGraph `invoke()` (Streamlit is sync)."""
+    import asyncio
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(researcher_agent(state))
+    # Already inside an event loop (e.g. ainvoke/astream) — run coroutine there.
+    import concurrent.futures
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, researcher_agent(state)).result()
 
 
 def create_extraction_jobs(state: GraphState) -> List[Send] | str:
@@ -128,7 +135,7 @@ def build_graph():
     builder = StateGraph(GraphState)
 
     builder.add_node("planner", planner_node)
-    builder.add_node("researcher", researcher_agent)
+    builder.add_node("researcher", _sync_researcher_agent)
     builder.add_node("extractor", extractor_node)
     builder.add_node("fact_checker", fact_checker_agent)
     builder.add_node("reasoner", reasoning_agent)

@@ -62,9 +62,9 @@ US-07 requires: *indicateur de progression par étape agent* and *pas de page bl
 |------|--------|-------------|
 | `app/main.py` | Rewritten | `st.navigation` entry (Accueil + Recherche) |
 | `app/__init__.py` | Created | Makes `app` importable as a package |
-| `app/pages/__init__.py` | Created | Pages package |
-| `app/pages/accueil.py` | Created | Landing / roadmap |
-| `app/pages/recherche.py` | Created | Recherche page + pipeline progress |
+| `app/views/__init__.py` | Created | Pages package |
+| `app/views/accueil.py` | Created | Landing / roadmap |
+| `app/views/recherche.py` | Created | Recherche page + pipeline progress |
 | `app/components/__init__.py` | Created | Components package |
 | `app/components/agent_progress.py` | Created | Checklist / progress helpers + `stream_words` |
 | `src/agents/graph.py` | Modified | `stream_pipeline()`, `PIPELINE_AGENTS`, shared initial state |

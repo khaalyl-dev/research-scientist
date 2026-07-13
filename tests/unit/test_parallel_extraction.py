@@ -102,6 +102,13 @@ class TestParallelExtractionGraph:
                 "status": SessionStatus.running.value,
             }
 
+        async def fake_researcher(state):
+            return {
+                "sources": [_source(1), _source(2), _source(3)],
+                "current_agent": "researcher",
+                "error": None,
+            }
+
         def fake_extractor(state):
             source = state["source"]
             return {
@@ -127,6 +134,14 @@ class TestParallelExtractionGraph:
 
         with (
             patch("src.agents.graph.planner_node", side_effect=fake_planner),
+            patch(
+                "src.agents.graph._sync_researcher_agent",
+                side_effect=lambda state: {
+                    "sources": [_source(1), _source(2), _source(3)],
+                    "current_agent": "researcher",
+                    "error": None,
+                },
+            ),
             patch("src.agents.graph.extractor_node", side_effect=fake_extractor),
             patch("src.agents.graph.create_session"),
         ):
@@ -135,7 +150,7 @@ class TestParallelExtractionGraph:
             config = {"configurable": {"thread_id": "test-parallel-send"}}
             result = graph.invoke(self._initial_state(), config)
 
-        # Stub researcher returns 3 sources; fake extractor returns 2 claims each
+        # Fake researcher returns 3 sources; fake extractor returns 2 claims each
         assert len(result["sources"]) == 3
         assert len(result["claims"]) == 6
         source_ids = {c["source_id"] for c in result["claims"]}
@@ -151,12 +166,19 @@ class TestParallelExtractionGraph:
                 "current_agent": "planner",
             }
 
-        def fake_researcher(state):
+        async def fake_researcher(state):
             return {"sources": [], "current_agent": "researcher", "error": "none"}
 
         with (
             patch("src.agents.graph.planner_node", side_effect=fake_planner),
-            patch("src.agents.graph.researcher_agent", side_effect=fake_researcher),
+            patch(
+                "src.agents.graph._sync_researcher_agent",
+                side_effect=lambda state: {
+                    "sources": [],
+                    "current_agent": "researcher",
+                    "error": "none",
+                },
+            ),
             patch("src.agents.graph.create_session"),
         ):
             graph = build_graph()

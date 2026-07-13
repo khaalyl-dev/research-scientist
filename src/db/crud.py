@@ -57,12 +57,20 @@ def save_sub_queries(session_id: str, sub_queries: List[str]) -> None:
 
 
 def save_source(session_id: str, source: SourceSchema) -> Source:
-    """Save a source to the database."""
+    """Save a source to the database (idempotent if the id already exists)."""
+    source_type = source.source_type
+    source_type_value = (
+        source_type.value if hasattr(source_type, "value") else str(source_type)
+    )
     with get_db_session() as db:
+        existing = db.query(Source).filter_by(id=source.id).first()
+        if existing:
+            return existing
+
         db_source = Source(
             id=source.id,
             session_id=session_id,
-            source_type=source.source_type.value,
+            source_type=source_type_value,
             title=source.title,
             url=source.url,
             published_year=source.published_year,
@@ -85,7 +93,7 @@ def save_claims(session_id: str, claims: List[ClaimSchema]) -> List[Claim]:
                 id=claim.id,
                 source_id=claim.source_id,
                 entity=claim.entity,
-                claim=claim.claim_text,
+                claim=claim.claim,
                 confidence=claim.confidence,
                 created_at=datetime.now(timezone.utc),
             )
