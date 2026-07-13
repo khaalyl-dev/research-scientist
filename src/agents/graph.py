@@ -46,12 +46,39 @@ def researcher_agent(state: GraphState) -> dict:
     }
 
 
-def create_extraction_jobs(state: GraphState) -> List[Send]:
-    """Creates one Send() job per source for parallel extraction."""
-    return [
-        Send("extractor", {"source": source, "session_id": state.get("session_id")})
-        for source in state["sources"]
+def create_extraction_jobs(state: GraphState) -> List[Send] | str:
+    """Fan-out: one parallel Extractor `Send()` per source (US-04).
+
+    Returns:
+      - ``list[Send]`` targeting ``extractor`` when sources exist
+      - ``\"fact_checker\"`` when there are zero sources (skip extraction
+        so the graph does not stall on an empty fan-out)
+    """
+    raw_sources = state.get("sources") or []
+    sources: list[dict] = []
+    for src in raw_sources:
+        if isinstance(src, dict):
+            sources.append(src)
+        elif hasattr(src, "model_dump"):
+            sources.append(src.model_dump())
+        else:
+            logger.warning(f"Skipping non-dict source in Send() fan-out: {type(src)!r}")
+
+    if not sources:
+        logger.info("No sources to extract — routing researcher → fact_checker")
+        return "fact_checker"
+
+    session_id = state.get("session_id")
+    jobs = [
+        Send("extractor", {"source": source, "session_id": session_id})
+        for source in sources
     ]
+    logger.info(f"Dispatching {len(jobs)} parallel Extractor Send() job(s)")
+    return jobs
+
+
+# Alias used in Extractor docs / older call sites
+dispatch_to_extractors = create_extraction_jobs
 
 
 def fact_checker_agent(state: GraphState) -> dict:
@@ -97,7 +124,7 @@ def teacher_agent(state: GraphState) -> dict:
 
 
 def build_graph():
-    """Build the LangGraph pipeline."""
+    """Build the LangGraph pipeline with parallel Extractor fan-out."""
     builder = StateGraph(GraphState)
 
     builder.add_node("planner", planner_node)
@@ -110,7 +137,14 @@ def build_graph():
     builder.set_entry_point("planner")
     builder.add_edge("planner", "researcher")
 
-    builder.add_conditional_edges("researcher", create_extraction_jobs, ["extractor"])
+    # Map-reduce: Researcher → N× Extractor (Send) → FactChecker
+    # Path map must list every possible destination (extractor OR fact_checker
+    # when the source list is empty).
+    builder.add_conditional_edges(
+        "researcher",
+        create_extraction_jobs,
+        ["extractor", "fact_checker"],
+    )
 
     builder.add_edge("extractor", "fact_checker")
     builder.add_edge("fact_checker", "reasoner")

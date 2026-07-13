@@ -1,7 +1,7 @@
 """
 Extractor agent (US-04) — runs ONCE PER SOURCE via LangGraph's Send() fan-out
-(see dispatch_to_extractors() in graph.py). Multiple instances of this node
-execute in parallel, one per source the Researcher found.
+(see `create_extraction_jobs` / `dispatch_to_extractors` in graph.py). Multiple
+instances of this node execute in parallel, one per source the Researcher found.
 
 Job: given one source's cleaned text, call the LLM to pull out structured
 claims in the exact format {entity, claim, confidence, source_url}, validate
