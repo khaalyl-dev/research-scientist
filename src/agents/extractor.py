@@ -22,10 +22,9 @@ non-reducer field — this exact mistake is documented in Sprint 2 Task 1's
 import json
 import re
 
-
+from src.db.crud import save_claims
 from src.schemas.claim import ClaimSchema
 from src.utils.logger import get_logger
-from src.db.crud import save_claims
 
 logger = get_logger(__name__)
 
