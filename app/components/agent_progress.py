@@ -4,20 +4,13 @@ Shared Streamlit helpers for agent progress + streaming (US-07).
 
 from __future__ import annotations
 
+import html
 import time
 from typing import Any, Iterable
 
 import streamlit as st
 
 from src.agents.graph import PIPELINE_AGENTS
-
-_STATUS_ICON = {
-    "pending": "⬜",
-    "running": "⏳",
-    "done": "✅",
-    "error": "❌",
-    "skipped": "➖",
-}
 
 _AGENT_TITLES = {
     "planner": "Planner",
@@ -34,16 +27,23 @@ def init_agent_statuses() -> dict[str, str]:
 
 
 def render_agent_checklist(statuses: dict[str, str], current: str | None = None) -> None:
-    """Render the per-agent checklist used on the Recherche page."""
-    lines: list[str] = []
+    """Render a styled per-agent checklist."""
+    rows: list[str] = ['<div class="ars-checklist">']
     for agent_id, label in PIPELINE_AGENTS:
         status = statuses.get(agent_id, "pending")
         if current == agent_id and status == "pending":
             status = "running"
-        icon = _STATUS_ICON.get(status, "⬜")
+        css = f"is-{status}" if status in {"running", "done", "error"} else ""
+        short = label.split("—")[0].strip()
         suffix = "…" if status == "running" else ""
-        lines.append(f"{icon} **{label}**{suffix}")
-    st.markdown("\n\n".join(lines))
+        rows.append(
+            f'<div class="ars-step {css}">'
+            f'<span class="ars-dot"></span>'
+            f'<span class="ars-step-label">{html.escape(short)}{suffix}</span>'
+            f"</div>"
+        )
+    rows.append("</div>")
+    st.markdown("\n".join(rows), unsafe_allow_html=True)
 
 
 def progress_fraction(statuses: dict[str, str]) -> float:
@@ -67,7 +67,6 @@ def stream_lines(text: str, delay_s: float = 0.025) -> Iterable[str]:
     """Yield lines for st.write_stream (keeps markdown lists intact)."""
     if not text:
         return
-    # Preserve trailing newlines so markdown blocks render cleanly.
     parts = text.splitlines(keepends=True)
     if not parts:
         yield text
@@ -128,7 +127,7 @@ def build_agent_narrative(
         if len(sources) > 5:
             lines.append(f"\n_… et {len(sources) - 5} autres._\n")
         if state.get("error"):
-            lines.append(f"\n⚠️ {state['error']}\n")
+            lines.append(f"\nNote: {state['error']}\n")
         return "".join(lines)
 
     if agent == "extractor":
@@ -187,5 +186,4 @@ def build_agent_narrative(
             lines.append("_Pas de réponse finale._\n")
         return "".join(lines)
 
-    # Unknown / future agents
     return f"### {title}\n\n_Étape terminée._\n"

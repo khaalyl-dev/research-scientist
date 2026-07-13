@@ -27,12 +27,12 @@ from app.views.recherche import render_recherche_page
 
 st.set_page_config(
     page_title="Autonomous Research Scientist",
-    page_icon="🔬",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
-accueil = st.Page(render_accueil_page, title="Accueil", icon="🏠")
-recherche = st.Page(render_recherche_page, title="Recherche", icon="🔍", default=True)
+accueil = st.Page(render_accueil_page, title="Accueil")
+recherche = st.Page(render_recherche_page, title="Recherche", default=True)
 
 pg = st.navigation([accueil, recherche])
 pg.run()
