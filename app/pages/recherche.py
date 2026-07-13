@@ -1,8 +1,9 @@
 """
 Page Recherche — US-01 + US-07
 
-Runs the LangGraph pipeline with live per-agent progress:
-Planner → Researcher → Extractor → FactChecker → Reasoner → Teacher.
+Runs the LangGraph pipeline with:
+- live per-agent progress checklist
+- st.write_stream() of each agent's narrative as it completes
 """
 
 from __future__ import annotations
@@ -14,10 +15,11 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from app.components.agent_progress import (
+    build_agent_narrative,
     init_agent_statuses,
     progress_fraction,
     render_agent_checklist,
-    stream_words,
+    stream_agent_text,
 )
 from src.agents.graph import PIPELINE_AGENTS, stream_pipeline
 
@@ -32,35 +34,11 @@ _LEVEL_TO_VALUE = {
 _AGENT_LABELS = {agent_id: label for agent_id, label in PIPELINE_AGENTS}
 
 
-def _summarize_agent_output(agent: str, output: dict[str, Any], state: dict[str, Any]) -> str:
-    if agent == "planner":
-        n = len(state.get("sub_queries") or [])
-        return f"{n} sous-requête(s) générée(s)"
-    if agent == "researcher":
-        n = len(state.get("sources") or [])
-        return f"{n} source(s) trouvée(s)"
-    if agent == "extractor":
-        n = len(state.get("claims") or [])
-        batch = len(output.get("claims") or [])
-        return f"+{batch} claim(s) — total {n}"
-    if agent == "fact_checker":
-        n = len(state.get("contradictions") or [])
-        return f"{n} contradiction(s)"
-    if agent == "reasoner":
-        reasoning = (state.get("reasoning") or "").strip()
-        preview = reasoning[:120] + ("…" if len(reasoning) > 120 else "")
-        return preview or "synthèse prête"
-    if agent == "teacher":
-        resp = state.get("final_response") or ""
-        return f"réponse prête ({len(resp)} caractères)"
-    return "ok"
-
-
 def render_recherche_page() -> None:
     st.title("🔍 Recherche")
     st.caption(
-        "Pose une question — suis la progression agent par agent "
-        "(Planner → Teacher)."
+        "Pose une question — progression + streaming de la réponse "
+        "agent par agent (Planner → Teacher)."
     )
 
     with st.form("recherche_form"):
@@ -83,11 +61,11 @@ def render_recherche_page() -> None:
 
     if not submitted:
         if "last_pipeline_result" in st.session_state:
-            _render_saved_result(st.session_state["last_pipeline_result"], stream=False)
+            _render_saved_result(st.session_state["last_pipeline_result"])
         else:
             st.info(
-                "👆 Entre une question pour lancer le pipeline multi-agents "
-                "avec indicateur de progression."
+                "👆 Entre une question pour lancer le pipeline multi-agents. "
+                "Chaque agent streame sa sortie dès qu’il termine."
             )
         return
 
@@ -98,11 +76,14 @@ def render_recherche_page() -> None:
     user_level = _LEVEL_TO_VALUE[level_label]
     statuses = init_agent_statuses()
     start = time.monotonic()
+    agent_streams: list[dict[str, str]] = []
 
     progress = st.progress(0.0, text="Démarrage du pipeline…")
     checklist_box = st.empty()
     status_box = st.status("Pipeline en cours…", expanded=True)
-    details = st.expander("Détails intermédiaires", expanded=True)
+
+    st.subheader("Flux agent par agent")
+    stream_panel = st.container()
 
     final_state: dict[str, Any] | None = None
     error_message: str | None = None
@@ -123,6 +104,7 @@ def render_recherche_page() -> None:
             if kind == "agent":
                 agent = event["agent"]
                 state = event.get("state") or {}
+                output = event.get("output") or {}
                 last_partial_state = state
 
                 if (
@@ -137,19 +119,14 @@ def render_recherche_page() -> None:
                 with checklist_box.container():
                     render_agent_checklist(statuses, current=agent)
 
-                summary = _summarize_agent_output(
-                    agent, event.get("output") or {}, state
-                )
                 label = _AGENT_LABELS.get(agent, agent)
-                st.write(f"**{label}** — {summary}")
-                with details:
-                    if agent == "planner":
-                        for i, sq in enumerate(state.get("sub_queries") or [], 1):
-                            st.markdown(f"{i}. {sq}")
-                    elif agent == "researcher":
-                        st.caption(f"{len(state.get('sources') or [])} sources")
-                    elif agent == "extractor":
-                        st.caption(f"{len(state.get('claims') or [])} claims cumulés")
+                st.write(f"⏳ {label}")
+
+                narrative = build_agent_narrative(agent, output, state)
+                with stream_panel:
+                    st.write_stream(stream_agent_text(narrative))
+                    st.divider()
+                agent_streams.append({"agent": agent, "text": narrative})
 
                 statuses[agent] = "done"
                 progress.progress(
@@ -192,15 +169,20 @@ def render_recherche_page() -> None:
         "user_level": user_level,
         "elapsed": elapsed,
         "state": final_state,
+        "agent_streams": agent_streams,
     }
     st.session_state["last_pipeline_result"] = result_payload
-    _render_saved_result(result_payload, stream=True)
+    _render_saved_result(result_payload, show_stream_replay=False)
 
 
-def _render_saved_result(payload: dict[str, Any], stream: bool = False) -> None:
+def _render_saved_result(
+    payload: dict[str, Any],
+    show_stream_replay: bool = True,
+) -> None:
     state = payload["state"]
     elapsed = payload.get("elapsed", 0.0)
     level_label = payload.get("level_label", "")
+    agent_streams = payload.get("agent_streams") or []
 
     sub_queries = state.get("sub_queries") or []
     sources = state.get("sources") or []
@@ -219,6 +201,12 @@ def _render_saved_result(payload: dict[str, Any], stream: bool = False) -> None:
     m2.metric("Sources", len(sources))
     m3.metric("Claims", len(claims))
     m4.metric("Contradictions", len(contradictions))
+
+    if show_stream_replay and agent_streams:
+        with st.expander("📼 Revoir le flux agent par agent", expanded=False):
+            for item in agent_streams:
+                st.markdown(item.get("text") or "")
+                st.divider()
 
     with st.expander(f"🧩 Sous-requêtes ({len(sub_queries)})", expanded=True):
         if not sub_queries:
@@ -244,12 +232,9 @@ def _render_saved_result(payload: dict[str, Any], stream: bool = False) -> None:
         if len(claims) > 20:
             st.caption(f"… et {len(claims) - 20} autres")
 
-    st.subheader("Réponse")
+    st.subheader("Réponse finale")
     if final_response:
-        if stream:
-            st.write_stream(stream_words(final_response))
-        else:
-            st.markdown(final_response)
+        st.markdown(final_response)
     else:
         st.info("Pas encore de réponse finale (Teacher stub / pipeline incomplet).")
 
