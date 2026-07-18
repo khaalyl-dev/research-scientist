@@ -9,7 +9,6 @@ Implement the **Teacher Agent** responsible for generating personalized final re
 | Field | Value |
 |-------|-------|
 | **Owner** | Zeineb |
-| **Estimate** | 5 hours |
 | **User Story** | US-06 |
 | **Status** | Completed |
 
