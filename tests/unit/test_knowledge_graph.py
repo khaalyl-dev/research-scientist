@@ -2,11 +2,8 @@
 Unit tests for the Knowledge Graph module.
 """
 
-import json
 import tempfile
 from pathlib import Path
-
-import pytest
 
 from src.knowledge.graph import KnowledgeGraph
 
