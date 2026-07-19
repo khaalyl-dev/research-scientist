@@ -10,6 +10,7 @@ The output is a markdown-formatted response that Streamlit renders directly.
 
 import re
 from typing import Dict, Any, List, Optional
+from prompts.teacher_prompts import get_teacher_prompt, build_prompt_context
 
 from src.utils.logger import get_logger
 
@@ -197,7 +198,10 @@ def teacher_agent(state: Dict[str, Any], llm_client=None) -> Dict[str, Any]:
     claims_text = _format_claims_with_sources(claims)
 
     # Build prompt
-    prompt = _TEACHER_PROMPT_TEMPLATE.format(
+    # In teacher_agent() function
+    level_prompt = get_teacher_prompt(user_level)
+
+    prompt = level_prompt.format(
         query=query,
         user_level=user_level,
         reasoning=reasoning,
