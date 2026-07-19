@@ -4,15 +4,14 @@ Unit tests for src/agents/teacher.py.
 All tests use an injected fake LLM client — no real API calls, no API keys required.
 """
 
-import pytest
 
 from src.agents.teacher import (
-    teacher_agent,
-    _format_claims_with_sources,
-    _format_sources,
+    _build_fallback_response,
     _clean_response,
     _ensure_citations,
-    _build_fallback_response,
+    _format_claims_with_sources,
+    _format_sources,
+    teacher_agent,
 )
 
 
@@ -48,7 +47,13 @@ def make_state(
     }
 
 
-def make_claim(entity: str, claim: str, confidence: float = 0.9, source_id: str = "s1", source_url: str = "https://example.com/1"):
+def make_claim(
+    entity: str,
+    claim: str,
+    confidence: float = 0.9,
+    source_id: str = "s1",
+    source_url: str = "https://example.com/1",
+):
     """Create a test claim dictionary."""
     return {
         "entity": entity,
@@ -59,7 +64,12 @@ def make_claim(entity: str, claim: str, confidence: float = 0.9, source_id: str 
     }
 
 
-def make_source(source_id: str = "s1", title: str = "Test Source", url: str = "https://example.com/1", source_type: str = "web"):
+def make_source(
+    source_id: str = "s1",
+    title: str = "Test Source",
+    url: str = "https://example.com/1",
+    source_type: str = "web",
+):
     """Create a test source dictionary."""
     return {
         "id": source_id,
@@ -190,7 +200,14 @@ class TestFormatHelpers:
 
     def test_format_sources(self):
         """Should format sources correctly."""
-        sources = [make_source(source_id="s1", title="Test Paper", url="https://example.com/1", source_type="arxiv")]
+        sources = [
+        make_source(
+            source_id="s1",
+            title="Test Paper",
+            url="https://example.com/1",
+            source_type="arxiv",
+        )
+    ]
         state = {"sources": sources}
         result = _format_sources(state)
 

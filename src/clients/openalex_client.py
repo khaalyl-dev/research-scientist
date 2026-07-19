@@ -102,8 +102,10 @@ class OpenAlexClient:
         url = (
             (work.get("primary_location") or {}).get("landing_page_url")
             or work.get("id")
-            or (work.get("doi") and f"https://doi.org/{str(work['doi']).replace('https://doi.org/', '')}")
-        )
+            or (
+                work.get("doi") and
+                f"https://doi.org/{str(work['doi']).replace('https://doi.org/', '')}"
+            )        )
         if not url:
             return None
         url = str(url)

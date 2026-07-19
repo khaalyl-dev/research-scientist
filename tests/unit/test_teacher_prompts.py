@@ -2,14 +2,13 @@
 Unit tests for level-specific prompts.
 """
 
-import pytest
 
 from prompts.teacher_prompts import (
-    get_teacher_prompt,
-    build_prompt_context,
     BEGINNER_PROMPT,
-    INTERMEDIATE_PROMPT,
     EXPERT_PROMPT,
+    INTERMEDIATE_PROMPT,
+    build_prompt_context,
+    get_teacher_prompt,
 )
 
 

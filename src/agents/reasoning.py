@@ -13,7 +13,7 @@ the agent works with claims only.
 """
 
 import re
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List
 
 from src.utils.logger import get_logger
 
@@ -21,35 +21,29 @@ logger = get_logger(__name__)
 
 
 # Prompt template for reasoning synthesis
-_REASONING_PROMPT_TEMPLATE = """You are a research synthesizer. Your job is to analyze the claims extracted from multiple sources and create a structured answer plan.
-
-## User Question:
-{query}
-
-## User Level:
-{user_level}
-
-## Claims from Sources:
-{claims_text}
-
-## Contradictions Detected (if any):
-{contradictions_text}
-
-## Your Task:
-Create a structured answer plan that:
-
-1. **Introduction** — Sets up the topic and explains why it matters
-2. **Key Concepts** — Defines and explains the main concepts
-3. **How It Works / Mechanisms** — Explains the process or mechanisms
-4. **Evidence Summary** — Summarizes the key claims and which sources support them
-5. **Contradictions (if any)** — Highlights disagreements between sources
-6. **Conclusion** — Summary and final takeaway
-
-## Response Format:
-Return a structured plan using markdown headings. Be clear and logical.
-
-Now create a structured answer plan for the user's question.
-"""
+_REASONING_PROMPT_TEMPLATE = (
+    "You are a research synthesizer. Your job is to analyze the claims "
+    "extracted from multiple sources and create a structured answer plan.\n\n"
+    "## User Question:\n"
+    "{query}\n\n"
+    "## User Level:\n"
+    "{user_level}\n\n"
+    "## Claims from Sources:\n"
+    "{claims_text}\n\n"
+    "## Contradictions Detected (if any):\n"
+    "{contradictions_text}\n\n"
+    "## Your Task:\n"
+    "Create a structured answer plan that:\n\n"
+    "1. **Introduction** — Sets up the topic and explains why it matters\n"
+    "2. **Key Concepts** — Defines and explains the main concepts\n"
+    "3. **How It Works / Mechanisms** — Explains the process or mechanisms\n"
+    "4. **Evidence Summary** — Summarizes the key claims and which sources support them\n"
+    "5. **Contradictions (if any)** — Highlights disagreements between sources\n"
+    "6. **Conclusion** — Summary and final takeaway\n\n"
+    "## Response Format:\n"
+    "Return a structured plan using markdown headings. Be clear and logical.\n\n"
+    "Now create a structured answer plan for the user's question."
+)
 
 
 def _format_claims(claims: List[Dict[str, Any]]) -> str:

@@ -9,59 +9,53 @@ The output is a markdown-formatted response that Streamlit renders directly.
 """
 
 import re
-from typing import Dict, Any, List, Optional
-from prompts.teacher_prompts import get_teacher_prompt, build_prompt_context
+from typing import Any, Dict, List
 
+from prompts.teacher_prompts import get_teacher_prompt
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
 # Prompt template for teacher response
-_TEACHER_PROMPT_TEMPLATE = """You are a skilled educator and research communicator. Your job is to write a clear, accurate, and engaging answer to the user's question based on the provided reasoning plan and evidence.
-
-## User Question:
-{query}
-
-## User Level: {user_level}
-
-### Level Guidelines:
-- **beginner**: Use simple language, avoid jargon (or explain it clearly), use analogies, keep sentences short, focus on the big picture.
-- **intermediate**: Balance technical accuracy with accessibility, use some technical terms with brief explanations, include moderate depth.
-- **expert**: Use technical terminology freely, include specific paper references, discuss nuances and debates, reference methodologies.
-
-## Reasoning Plan:
-{reasoning}
-
-## Key Claims with Sources:
-{claims_with_sources}
-
-## Your Task:
-Write a complete, polished answer that:
-
-1. **Follows the reasoning plan** — Use the structure from the reasoning plan
-2. **Adapts to the user level** — Match the vocabulary and depth to the specified level
-3. **Includes inline citations** — EVERY claim MUST have a citation like [s1], [s2], etc.
-4. **Provides a source list** — At the end, list all sources with their URLs
-
-## Response Format:
-Use markdown headings, paragraphs, and bullet points. Make it readable and well-structured.
-
-## Citation Rules (CRITICAL):
-- Every factual statement must be followed by a citation: [s1], [s2], etc.
-- Example: "RAG improves factual accuracy in LLMs [s1]."
-- At the end, include a sources section with all cited sources.
-
-## Sources Section Format:
-Sources
-[s1] Source Title: URL
-
-[s2] Source Title: URL
-
-text
-
-Now write the final answer for the user. Remember: include citations for EVERY claim!
-"""
+_TEACHER_PROMPT_TEMPLATE = (
+    "You are a skilled educator and research communicator. Your job is to "
+    "write a clear, accurate, and engaging answer to the user's question "
+    "based on the provided reasoning plan and evidence.\n\n"
+    "## User Question:\n"
+    "{query}\n\n"
+    "## User Level: {user_level}\n\n"
+    "### Level Guidelines:\n"
+    "- **beginner**: Use simple language, avoid jargon (or explain it clearly), "
+    "use analogies, keep sentences short, focus on the big picture.\n"
+    "- **intermediate**: Balance technical accuracy with accessibility, "
+    "use some technical terms with brief explanations, include moderate depth.\n"
+    "- **expert**: Use technical terminology freely, include specific paper references, "
+    "discuss nuances and debates, reference methodologies.\n\n"
+    "## Reasoning Plan:\n"
+    "{reasoning}\n\n"
+    "## Key Claims with Sources:\n"
+    "{claims_with_sources}\n\n"
+    "## Your Task:\n"
+    "Write a complete, polished answer that:\n\n"
+    "1. **Follows the reasoning plan** — Use the structure from the reasoning plan\n"
+    "2. **Adapts to the user level** — Match the vocabulary and depth to the specified level\n"
+    "3. **Includes inline citations** — EVERY claim MUST have a citation like [s1], [s2], etc.\n"
+    "4. **Provides a source list** — At the end, list all sources with their URLs\n\n"
+    "## Response Format:\n"
+    "Use markdown headings, paragraphs, and bullet points. "
+    "Make it readable and well-structured.\n\n"
+    "## Citation Rules (CRITICAL):\n"
+    "- Every factual statement must be followed by a citation: [s1], [s2], etc.\n"
+    '- Example: "RAG improves factual accuracy in LLMs [s1]."\n'
+    "- At the end, include a sources section with all cited sources.\n\n"
+    "## Sources Section Format:\n"
+    "Sources\n"
+    "[s1] Source Title: URL\n\n"
+    "[s2] Source Title: URL\n\n"
+    "text\n\n"
+    "Now write the final answer for the user. Remember: include citations for EVERY claim!"
+)
 
 
 def _format_claims_with_sources(claims: List[Dict[str, Any]]) -> str:
@@ -145,7 +139,12 @@ def _ensure_citations(response: str, claims: List[Dict[str, Any]]) -> str:
     return response
 
 
-def _build_fallback_response(query: str, reasoning: str, claims: List[Dict], user_level: str) -> str:
+def _build_fallback_response(
+    query: str,
+    reasoning: str,
+    claims: List[Dict],
+    user_level: str,
+) -> str:
     """Build a simple fallback response if LLM fails."""
     response = f"# Answer: {query}\n\n"
 
@@ -197,8 +196,7 @@ def teacher_agent(state: Dict[str, Any], llm_client=None) -> Dict[str, Any]:
     # Format claims with sources
     claims_text = _format_claims_with_sources(claims)
 
-    # Build prompt
-    # In teacher_agent() function
+    # Build prompt using level-specific prompt
     level_prompt = get_teacher_prompt(user_level)
 
     prompt = level_prompt.format(

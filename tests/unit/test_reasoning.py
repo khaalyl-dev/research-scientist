@@ -4,14 +4,13 @@ Unit tests for src/agents/reasoning.py.
 All tests use an injected fake LLM client — no real API calls, no API keys required.
 """
 
-import pytest
 
 from src.agents.reasoning import (
-    reasoning_agent,
+    _build_fallback_plan,
+    _extract_plan,
     _format_claims,
     _format_contradictions,
-    _extract_plan,
-    _build_fallback_plan,
+    reasoning_agent,
 )
 
 
@@ -147,7 +146,10 @@ Mixed evidence on RAG's effectiveness."""
         result = reasoning_agent(state, llm_client=llm)
 
         assert "reasoning" in result
-        assert "contradictions" in result["reasoning"].lower() or "disagree" in result["reasoning"].lower()
+        assert (
+        "contradictions" in result["reasoning"].lower()
+        or "disagree" in result["reasoning"].lower()
+    )
 
     def test_llm_failure_falls_back(self):
         """Should fall back to a simple plan when LLM fails."""

@@ -26,7 +26,13 @@ class FakeSTModel:
     def get_sentence_embedding_dimension(self) -> int:
         return self.dim
 
-    def encode(self, texts, convert_to_numpy=True, normalize_embeddings=True, show_progress_bar=False):
+    def encode(
+    self,
+    texts,
+    convert_to_numpy=True,
+    normalize_embeddings=True,
+    show_progress_bar=False,
+):
         vectors = []
         for i, text in enumerate(texts):
             rng = np.random.default_rng(abs(hash(text)) % (2**32))
@@ -181,7 +187,11 @@ class TestFaissStore:
         """Fake embedder → FAISS add/search without downloading a model."""
         emb = Embedder(model=FakeSTModel(dim=8))
         store = FaissStore(dim=emb.dimension, index_dir=tmp_path)
-        texts = ["RAG improves factuality", "transformers use attention", "vector search with FAISS"]
+        texts = [
+        "RAG improves factuality",
+        "transformers use attention",
+        "vector search with FAISS",
+    ]
         vectors = emb.encode(texts)
         store.add(vectors, ids=["c1", "c2", "c3"], texts=texts)
         store.save("pipeline-demo")
