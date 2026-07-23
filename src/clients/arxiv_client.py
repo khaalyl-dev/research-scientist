@@ -38,9 +38,8 @@ from src.schemas.source import SourceSchema
 
 logger = logging.getLogger(__name__)
 
-# arXiv's public API asks for no more than 1 request / 3 seconds when you
-# are not using their bulk endpoints. We throttle a little more gently
-# than that ceiling to stay safely inside the guideline.
+# arXiv asks for ~1 request / 3 seconds. Keep a short throttle, but fail
+# fast on 429 instead of multi-minute retry storms.
 _MIN_SECONDS_BETWEEN_REQUESTS = 3.0
 
 
@@ -50,14 +49,9 @@ class ArxivClient:
     def __init__(self, min_interval: float = _MIN_SECONDS_BETWEEN_REQUESTS) -> None:
         self._min_interval = min_interval
         self._last_request_ts: float = 0.0
-        # arxiv.Client handles paging / delays internally too, but we keep
-        # our own throttle since we may call `search()` many times across
-        # a single multi-sub-query research session.
-        self._client = arxiv.Client(page_size=25, delay_seconds=3, num_retries=2)
+        # page_size capped to what we actually request; fewer retries on 429
+        self._client = arxiv.Client(page_size=10, delay_seconds=3, num_retries=1)
 
-    # ------------------------------------------------------------------ #
-    # Public API
-    # ------------------------------------------------------------------ #
     def search(self, query: str, max_results: int = 5) -> List[SourceSchema]:
         """
         Search arXiv and return a list of Source objects.
@@ -78,12 +72,9 @@ class ArxivClient:
         logger.info("arXiv search: query=%r -> %d results", query, len(sources))
         return sources
 
-    # ------------------------------------------------------------------ #
-    # Internals
-    # ------------------------------------------------------------------ #
     @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
+        stop=stop_after_attempt(2),
+        wait=wait_exponential(multiplier=1, min=1, max=4),
         retry=retry_if_exception_type(Exception),
         reraise=True,
     )
@@ -93,8 +84,6 @@ class ArxivClient:
             max_results=max_results,
             sort_by=arxiv.SortCriterion.Relevance,
         )
-        # arxiv.Client.results() returns a generator; materialize it here
-        # so retry can actually catch network errors raised during iteration.
         return list(self._client.results(search))
 
     def _throttle(self) -> None:

@@ -1,20 +1,20 @@
 """
 Researcher agent (US-03) — the second node in the pipeline.
 
-Fetches candidate sources in parallel from:
-  - arXiv
-  - Web (Brave → DuckDuckGo + scraper)
-  - Wikipedia
-  - Semantic Scholar
-  - OpenAlex
-  - PubMed
+Fetches candidate sources from arXiv, web, Wikipedia, Semantic Scholar,
+OpenAlex, and (when relevant) PubMed — then deduplicates by URL.
 
-Then deduplicates by URL and caps the total count for the Extractor.
+Performance notes:
+  - Fast providers (Wikipedia, OpenAlex, web) run in parallel per sub-query.
+  - Rate-limited APIs (arXiv, Semantic Scholar) run **once** on the primary
+    query and are serialized so we do not stampede into HTTP 429 storms.
+  - PubMed only runs for biomedical-looking queries.
 """
 
 from __future__ import annotations
 
 import asyncio
+import re
 
 from src.agents.state import GraphState
 from src.schemas.source import SourceSchema
@@ -22,13 +22,22 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-MAX_ARXIV_PER_SUBQUERY = 2
+MAX_ARXIV = 3
 MAX_WEB_PER_SUBQUERY = 1
 MAX_WIKI_PER_SUBQUERY = 1
-MAX_SCHOLAR_PER_SUBQUERY = 1
+MAX_SCHOLAR = 2
 MAX_OPENALEX_PER_SUBQUERY = 1
-MAX_PUBMED_PER_SUBQUERY = 1
+MAX_PUBMED = 2
 MAX_TOTAL_SOURCES = 12
+
+# Kept for tests that import the old constant name
+MAX_ARXIV_PER_SUBQUERY = MAX_ARXIV
+
+_BIOMED_RE = re.compile(
+    r"\b(pubmed|clinical|medical|medicine|disease|patient|therapy|"
+    r"drug|cancer|genom|protein|bio(?:logy|medical)|pharma|diagnos)\b",
+    re.IGNORECASE,
+)
 
 
 async def _fetch_client(client, query: str, max_results: int, label: str) -> list[SourceSchema]:
@@ -73,6 +82,10 @@ def _dedupe_by_url(sources: list[SourceSchema]) -> list[SourceSchema]:
             seen.add(key)
             deduped.append(source)
     return deduped
+
+
+def _is_biomedical(text: str) -> bool:
+    return bool(_BIOMED_RE.search(text or ""))
 
 
 def _default_clients() -> dict:
@@ -126,27 +139,47 @@ async def researcher_node(
 
         web_search_fn = web_search
 
-    sub_queries = state["sub_queries"] or [state["query"]]
+    main_query = (state.get("query") or "").strip()
+    sub_queries = state.get("sub_queries") or []
+    sub_queries = [q for q in sub_queries if isinstance(q, str) and q.strip()]
+    if not sub_queries:
+        sub_queries = [main_query] if main_query else []
 
-    tasks = []
+    primary = main_query or (sub_queries[0] if sub_queries else "")
+
+    # --- Fast path: wiki / openalex / web per sub-query (true parallel) ---
+    fast_tasks = []
     for q in sub_queries:
-        tasks.append(_fetch_client(arxiv_client, q, MAX_ARXIV_PER_SUBQUERY, "arXiv"))
-        tasks.append(_fetch_web(web_search_fn, scraper, q, MAX_WEB_PER_SUBQUERY))
-        tasks.append(
+        fast_tasks.append(
             _fetch_client(wikipedia_client, q, MAX_WIKI_PER_SUBQUERY, "Wikipedia")
         )
-        tasks.append(
-            _fetch_client(scholar_client, q, MAX_SCHOLAR_PER_SUBQUERY, "Semantic Scholar")
-        )
-        tasks.append(
+        fast_tasks.append(
             _fetch_client(openalex_client, q, MAX_OPENALEX_PER_SUBQUERY, "OpenAlex")
         )
-        tasks.append(_fetch_client(pubmed_client, q, MAX_PUBMED_PER_SUBQUERY, "PubMed"))
+        fast_tasks.append(_fetch_web(web_search_fn, scraper, q, MAX_WEB_PER_SUBQUERY))
 
-    results = await asyncio.gather(*tasks)
+    # --- Slow / rate-limited APIs: once on the primary query, serialized ---
+    slow_tasks = []
+    if primary:
+        slow_tasks.append(_fetch_client(arxiv_client, primary, MAX_ARXIV, "arXiv"))
+        slow_tasks.append(
+            _fetch_client(scholar_client, primary, MAX_SCHOLAR, "Semantic Scholar")
+        )
+        if _is_biomedical(primary) or any(_is_biomedical(q) for q in sub_queries):
+            slow_tasks.append(
+                _fetch_client(pubmed_client, primary, MAX_PUBMED, "PubMed")
+            )
+        else:
+            logger.info("Skipping PubMed (query does not look biomedical)")
+
+    fast_results, slow_results = await asyncio.gather(
+        asyncio.gather(*fast_tasks) if fast_tasks else asyncio.sleep(0, result=[]),
+        # Run slow APIs sequentially to avoid arXiv/Scholar 429 storms
+        _run_sequential(slow_tasks),
+    )
 
     all_sources: list[SourceSchema] = []
-    for result in results:
+    for result in list(fast_results) + list(slow_results):
         all_sources.extend(result)
 
     deduped = _dedupe_by_url(all_sources)[:MAX_TOTAL_SOURCES]
@@ -172,3 +205,11 @@ async def researcher_node(
         "error": error,
         "current_agent": "researcher",
     }
+
+
+async def _run_sequential(tasks: list) -> list:
+    """Await coroutines one-by-one (rate-limited providers)."""
+    results = []
+    for coro in tasks:
+        results.append(await coro)
+    return results
