@@ -175,10 +175,20 @@ def build_agent_narrative(
         ]
         for item in contradictions[:5]:
             if isinstance(item, dict):
-                expl = item.get("explanation") or (
-                    f"divergence={item.get('divergence_score', '?')}"
-                )
-                lines.append(f"- {expl}\n")
+                claim_a = item.get("claim_a") or ""
+                claim_b = item.get("claim_b") or ""
+                score = item.get("similarity_score", item.get("divergence_score", "?"))
+                expl = item.get("explanation") or ""
+                if claim_a and claim_b:
+                    lines.append(
+                        f"- **A:** {claim_a}\n"
+                        f"  **B:** {claim_b}\n"
+                        f"  _(sim. {score})_\n"
+                    )
+                elif expl:
+                    lines.append(f"- {expl}\n")
+                else:
+                    lines.append(f"- score={score}\n")
             else:
                 lines.append(f"- {item}\n")
         if not contradictions:
