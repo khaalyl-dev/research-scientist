@@ -47,6 +47,18 @@ def update_session_status(session_id: str, status: str) -> None:
             db.commit()
 
 
+def save_final_response(session_id: str, final_response: str) -> None:
+    """Persist Teacher final answer and mark session completed."""
+    with get_db_session() as db:
+        session = db.query(ResearchSession).filter_by(id=session_id).first()
+        if not session:
+            return
+        session.final_response = final_response
+        session.status = "completed"
+        session.completed_at = datetime.now(timezone.utc)
+        db.commit()
+
+
 def save_sub_queries(session_id: str, sub_queries: List[str]) -> None:
     """Persist Planner sub-queries on the session row (US-02)."""
     with get_db_session() as db:
@@ -86,6 +98,7 @@ def save_source(session_id: str, source: SourceSchema) -> Source:
 
 def save_claims(session_id: str, claims: List[ClaimSchema]) -> List[Claim]:
     """Save claims to the database."""
+    _ = session_id
     with get_db_session() as db:
         saved_claims = []
         for claim in claims:
