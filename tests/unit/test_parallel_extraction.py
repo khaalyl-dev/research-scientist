@@ -143,6 +143,29 @@ class TestParallelExtractionGraph:
                 },
             ),
             patch("src.agents.graph.extractor_node", side_effect=fake_extractor),
+            patch(
+                "src.agents.graph.fact_checker_agent",
+                side_effect=lambda state: {
+                    "contradictions": [],
+                    "has_contradictions": False,
+                    "current_agent": "fact_checker",
+                },
+            ),
+            patch(
+                "src.agents.graph.reasoner_node",
+                side_effect=lambda state: {
+                    "reasoning": "plan",
+                    "current_agent": "reasoner",
+                },
+            ),
+            patch(
+                "src.agents.graph.teacher_node",
+                side_effect=lambda state: {
+                    "final_response": "answer",
+                    "current_agent": "teacher",
+                    "status": SessionStatus.completed.value,
+                },
+            ),
             patch("src.agents.graph.create_session"),
         ):
             # Rebuild graph AFTER patches so nodes bind to fakes
@@ -177,6 +200,29 @@ class TestParallelExtractionGraph:
                     "sources": [],
                     "current_agent": "researcher",
                     "error": "none",
+                },
+            ),
+            patch(
+                "src.agents.graph.fact_checker_agent",
+                side_effect=lambda state: {
+                    "contradictions": [],
+                    "has_contradictions": False,
+                    "current_agent": "fact_checker",
+                },
+            ),
+            patch(
+                "src.agents.graph.reasoner_node",
+                side_effect=lambda state: {
+                    "reasoning": "plan",
+                    "current_agent": "reasoner",
+                },
+            ),
+            patch(
+                "src.agents.graph.teacher_node",
+                side_effect=lambda state: {
+                    "final_response": "answer",
+                    "current_agent": "teacher",
+                    "status": SessionStatus.completed.value,
                 },
             ),
             patch("src.agents.graph.create_session"),

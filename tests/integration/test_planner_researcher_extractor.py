@@ -306,6 +306,29 @@ class TestGraphPlannerResearcherExtractor:
             patch("src.agents.extractor.save_claims"),
             patch("src.agents.graph.create_session"),
             patch("src.agents.graph._sync_researcher_agent", side_effect=sync_researcher),
+            patch(
+                "src.agents.graph.fact_checker_agent",
+                side_effect=lambda state: {
+                    "contradictions": [],
+                    "has_contradictions": False,
+                    "current_agent": "fact_checker",
+                },
+            ),
+            patch(
+                "src.agents.graph.reasoner_node",
+                side_effect=lambda state: {
+                    "reasoning": "## Introduction\n\nPlan.",
+                    "current_agent": "reasoner",
+                },
+            ),
+            patch(
+                "src.agents.graph.teacher_node",
+                side_effect=lambda state: {
+                    "final_response": "Final answer [s1].",
+                    "current_agent": "teacher",
+                    "status": SessionStatus.completed.value,
+                },
+            ),
         ):
             graph = build_graph()
             result = graph.invoke(
@@ -368,6 +391,29 @@ class TestGraphPlannerResearcherExtractor:
             patch("src.agents.extractor.save_claims"),
             patch("src.agents.graph.create_session"),
             patch("src.agents.graph._sync_researcher_agent", side_effect=sync_researcher),
+            patch(
+                "src.agents.graph.fact_checker_agent",
+                side_effect=lambda state: {
+                    "contradictions": [],
+                    "has_contradictions": False,
+                    "current_agent": "fact_checker",
+                },
+            ),
+            patch(
+                "src.agents.graph.reasoner_node",
+                side_effect=lambda state: {
+                    "reasoning": "plan",
+                    "current_agent": "reasoner",
+                },
+            ),
+            patch(
+                "src.agents.graph.teacher_node",
+                side_effect=lambda state: {
+                    "final_response": "answer",
+                    "current_agent": "teacher",
+                    "status": SessionStatus.completed.value,
+                },
+            ),
         ):
             graph = build_graph()
             result = graph.invoke(

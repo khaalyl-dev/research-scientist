@@ -74,7 +74,7 @@ def render_accueil_page() -> None:
       <strong>Sprint 2</strong> — Agents + FAISS + UI
   </p>
   <p class="ars-muted" style="margin-bottom:0.4rem;">
-      <strong>Sprint 3</strong> — Contradictions + graphe
+    <strong>Sprint 3</strong> — FactChecker + citations + graphe
   </p>
   <p class="ars-muted" style="margin:0;"><strong>Sprint 4</strong> — Finalisation &amp; démo</p>
 </div>

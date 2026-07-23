@@ -1,8 +1,12 @@
 """
 LangGraph graph builder for the agent pipeline.
+
+Wires Sprint 2 agents + Sprint 3 FactChecker / Reasoning / Teacher
+(Zeineb's reasoning.py & teacher.py — imported, not modified).
 """
 
 import uuid
+from pathlib import Path
 from typing import List
 
 from langgraph.checkpoint.memory import MemorySaver
@@ -10,18 +14,20 @@ from langgraph.graph import END, StateGraph
 from langgraph.types import Send
 
 from src.agents.extractor import extractor_node
+from src.agents.fact_checker import fact_checker_agent
 from src.agents.planner import planner_node
+from src.agents.reasoning import reasoning_agent
 from src.agents.researcher import researcher_node
 from src.agents.state import GraphState
-from src.db.crud import create_session
+from src.agents.teacher import teacher_agent
+from src.db.crud import create_session, save_final_response
+from src.knowledge.graph import KnowledgeGraph
 from src.schemas.common import SessionStatus, UserLevel
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# ============================================================================
-# AGENTS (stubs remain for FactChecker / Reasoning / Teacher)
-# ============================================================================
+_GRAPH_DIR = Path(__file__).resolve().parents[2] / "data" / "graphs"
 
 
 async def researcher_agent(state: GraphState) -> dict:
@@ -46,7 +52,6 @@ def _sync_researcher_agent(state: GraphState) -> dict:
         asyncio.get_running_loop()
     except RuntimeError:
         return asyncio.run(researcher_agent(state))
-    # Already inside an event loop (e.g. ainvoke/astream) — run coroutine there.
     import concurrent.futures
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
@@ -54,13 +59,7 @@ def _sync_researcher_agent(state: GraphState) -> dict:
 
 
 def create_extraction_jobs(state: GraphState) -> List[Send] | str:
-    """Fan-out: one parallel Extractor `Send()` per source (US-04).
-
-    Returns:
-      - ``list[Send]`` targeting ``extractor`` when sources exist
-      - ``\"fact_checker\"`` when there are zero sources (skip extraction
-        so the graph does not stall on an empty fan-out)
-    """
+    """Fan-out: one parallel Extractor `Send()` per source (US-04)."""
     raw_sources = state.get("sources") or []
     sources: list[dict] = []
     for src in raw_sources:
@@ -84,50 +83,63 @@ def create_extraction_jobs(state: GraphState) -> List[Send] | str:
     return jobs
 
 
-# Alias used in Extractor docs / older call sites
 dispatch_to_extractors = create_extraction_jobs
 
 
-def fact_checker_agent(state: GraphState) -> dict:
-    """Stub FactChecker - detects contradictions."""
-    print(f"[FactChecker] Checking {len(state.get('claims', []))} claims")
-    return {
-        "contradictions": [],
-        "has_contradictions": False,
-        "current_agent": "fact_checker",
-    }
+def _build_and_export_knowledge_graph(state: GraphState) -> str | None:
+    """Consume Zeineb's KnowledgeGraph API — build from claims, export JSON."""
+    claims = state.get("claims") or []
+    session_id = state.get("session_id") or "unknown"
+    if not claims:
+        return None
+    try:
+        kg = KnowledgeGraph(session_id=session_id)
+        claim_dicts = [
+            c.model_dump() if hasattr(c, "model_dump") else dict(c) for c in claims
+        ]
+        kg.build_from_claims(claim_dicts)
+        _GRAPH_DIR.mkdir(parents=True, exist_ok=True)
+        path = _GRAPH_DIR / f"{session_id}.json"
+        kg.export_json(path)
+        return str(path)
+    except Exception as e:
+        logger.warning(f"Knowledge graph build/export failed: {e}")
+        return None
 
 
-def reasoning_agent(state: GraphState) -> dict:
-    """Stub Reasoning - synthesizes answer plan."""
-    print(f"[Reasoning] Synthesizing for: {state['query']}")
-    return {
-        "reasoning": f"Stub reasoning for '{state['query']}'.",
-        "current_agent": "reasoning",
-    }
+def reasoner_node(state: GraphState) -> dict:
+    """Wrapper: Zeineb Reasoning + build NetworkX KG for the Graphe page."""
+    result = dict(reasoning_agent(state))
+    graph_path = _build_and_export_knowledge_graph(state)
+    if graph_path:
+        try:
+            meta = _GRAPH_DIR / f"{state.get('session_id')}.path"
+            meta.write_text(graph_path, encoding="utf-8")
+        except Exception:
+            pass
+    result["current_agent"] = "reasoner"
+    return result
 
 
-def teacher_agent(state: GraphState) -> dict:
-    """Stub Teacher - writes final response."""
-    level = (
-        state["user_level"].value if hasattr(state["user_level"], "value") else state["user_level"]
-    )
-    print(f"[Teacher] Writing response at {level} level")
+def teacher_node(state: GraphState) -> dict:
+    """Wrapper: Zeineb Teacher + persist final response / session status."""
+    result = dict(teacher_agent(state))
+    session_id = state.get("session_id")
+    final = result.get("final_response") or ""
+    if session_id and final:
+        try:
+            save_final_response(session_id, final)
+        except Exception as e:
+            logger.warning(f"Failed to save final response: {e}")
+            try:
+                from src.db.crud import update_session_status
 
-    return {
-        "final_response": (
-            f"# Answer about '{state['query']}'\n\n"
-            f"**Level: {level}**\n\n"
-            f"This is a stub response."
-        ),
-        "current_agent": "teacher",
-        "status": SessionStatus.completed.value,
-    }
-
-
-# ============================================================================
-# GRAPH BUILDER
-# ============================================================================
+                update_session_status(session_id, SessionStatus.completed.value)
+            except Exception as e2:
+                logger.warning(f"Failed to update session status: {e2}")
+    result["current_agent"] = "teacher"
+    result["status"] = SessionStatus.completed.value
+    return result
 
 
 def build_graph():
@@ -138,15 +150,12 @@ def build_graph():
     builder.add_node("researcher", _sync_researcher_agent)
     builder.add_node("extractor", extractor_node)
     builder.add_node("fact_checker", fact_checker_agent)
-    builder.add_node("reasoner", reasoning_agent)
-    builder.add_node("teacher", teacher_agent)
+    builder.add_node("reasoner", reasoner_node)
+    builder.add_node("teacher", teacher_node)
 
     builder.set_entry_point("planner")
     builder.add_edge("planner", "researcher")
 
-    # Map-reduce: Researcher → N× Extractor (Send) → FactChecker
-    # Path map must list every possible destination (extractor OR fact_checker
-    # when the source list is empty).
     builder.add_conditional_edges(
         "researcher",
         create_extraction_jobs,
@@ -162,7 +171,6 @@ def build_graph():
     return builder.compile(checkpointer=memory)
 
 
-# Ordered steps shown in the Streamlit Recherche progress UI (US-07).
 PIPELINE_AGENTS: list[tuple[str, str]] = [
     ("planner", "Planner — décomposition en sous-requêtes"),
     ("researcher", "Researcher — recherche de sources"),
@@ -207,14 +215,7 @@ def run_pipeline(query: str, user_level: str = "intermediate") -> dict:
 
 
 def stream_pipeline(query: str, user_level: str = "intermediate"):
-    """Yield per-agent updates for the Streamlit Recherche progress UI.
-
-    Yields dicts:
-      {"event": "start", "session_id": str, "agents": [...]}
-      {"event": "agent", "agent": str, "output": dict, "state": dict}
-      {"event": "done", "state": dict}
-      {"event": "error", "error": str, "state": dict | None}
-    """
+    """Yield per-agent updates for the Streamlit Recherche progress UI."""
     session_id = str(uuid.uuid4())
     try:
         create_session(session_id, query, user_level)
@@ -234,11 +235,8 @@ def stream_pipeline(query: str, user_level: str = "intermediate"):
     accumulated: dict = dict(initial_state)
     try:
         for update in graph.stream(initial_state, config, stream_mode="updates"):
-            # update = {node_name: partial_state_dict}
             for agent_name, output in update.items():
                 partial = output if isinstance(output, dict) else {}
-                # claims use operator.add in GraphState — accumulate batches
-                # from parallel Extractor Send() branches instead of overwriting.
                 merged = {**accumulated, **partial}
                 if "claims" in partial:
                     merged["claims"] = list(accumulated.get("claims") or []) + list(
@@ -259,7 +257,6 @@ def stream_pipeline(query: str, user_level: str = "intermediate"):
         yield {"event": "error", "error": str(e), "state": accumulated}
 
 
-
 if __name__ == "__main__":
     result = run_pipeline("What is RAG?", user_level="beginner")
 
@@ -271,3 +268,4 @@ if __name__ == "__main__":
     print(f"Sub-queries: {result.get('sub_queries', [])}")
     print(f"Sources: {len(result.get('sources', []))}")
     print(f"Claims: {len(result.get('claims', []))}")
+    print(f"Contradictions: {len(result.get('contradictions', []))}")

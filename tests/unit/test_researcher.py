@@ -116,7 +116,7 @@ class TestResearcherNode:
         state = make_state("s1", "what is RAG?", UserLevel.beginner)
         state["sub_queries"] = ["RAG overview"]
 
-        arxiv = FakeArxivClient({"RAG overview": [make_arxiv_source("RAG overview")]})
+        arxiv = FakeArxivClient({"what is RAG?": [make_arxiv_source("what is RAG?")]})
         hits = {
             "RAG overview": [
                 WebSearchResult(title="hit", url="https://example.com/a", engine="brave")
@@ -149,14 +149,12 @@ class TestResearcherNode:
                 {"RAG": [make_source("RAG", SourceType.wikipedia, "RAG")]}
             ),
             scholar_client=FakeSearchClient(
-                {"RAG": [make_source("RAG", SourceType.scholar, "abc")]}
+                {"q": [make_source("q", SourceType.scholar, "abc")]}
             ),
             openalex_client=FakeSearchClient(
                 {"RAG": [make_source("RAG", SourceType.openalex, "W1")]}
             ),
-            pubmed_client=FakeSearchClient(
-                {"RAG": [make_source("RAG", SourceType.pubmed, "123")]}
-            ),
+            pubmed_client=FakeSearchClient(),  # skipped — not biomedical
         )
 
         types = {s.source_type for s in result["sources"]}
@@ -164,7 +162,6 @@ class TestResearcherNode:
             SourceType.wikipedia,
             SourceType.scholar,
             SourceType.openalex,
-            SourceType.pubmed,
         }
         assert result["error"] is None
 
@@ -172,23 +169,29 @@ class TestResearcherNode:
         state = make_state("s1", "q", UserLevel.beginner)
         state["sub_queries"] = ["sub-a", "sub-b", "sub-c"]
 
-        arxiv = FakeArxivClient(
+        # Fast providers still fan out; arXiv is called once on the main query.
+        wiki = FakeSearchClient(
             {
-                "sub-a": [make_arxiv_source("sub-a", "a")],
-                "sub-b": [make_arxiv_source("sub-b", "b")],
-                "sub-c": [make_arxiv_source("sub-c", "c")],
+                "sub-a": [make_source("sub-a", SourceType.wikipedia, "a")],
+                "sub-b": [make_source("sub-b", SourceType.wikipedia, "b")],
+                "sub-c": [make_source("sub-c", SourceType.wikipedia, "c")],
             }
         )
+        arxiv = FakeArxivClient({"q": [make_arxiv_source("q", "main")]})
         result = await researcher_node(
             state,
             arxiv_client=arxiv,
             scraper=FakeScraper(),
             web_search_fn=make_web_search_fn({}),
-            **_empty_extras(),
+            wikipedia_client=wiki,
+            scholar_client=FakeSearchClient(),
+            openalex_client=FakeSearchClient(),
+            pubmed_client=FakeSearchClient(),
         )
 
-        assert len(arxiv.calls) == 3
-        assert len(result["sources"]) == 3
+        assert len(arxiv.calls) == 1  # once on primary query, not 3×
+        assert arxiv.calls[0][0] == "q"
+        assert len(result["sources"]) >= 3
 
     async def test_falls_back_to_main_query_when_no_subqueries(self):
         state = make_state("s1", "main question", UserLevel.beginner)
@@ -203,22 +206,66 @@ class TestResearcherNode:
             **_empty_extras(),
         )
 
-        assert arxiv.calls == [("main question", 2)]
+        assert arxiv.calls == [("main question", 3)]  # MAX_ARXIV
         assert len(result["sources"]) == 1
+
+    async def test_skips_pubmed_for_non_biomedical(self):
+        state = make_state("s1", "what is RAG?", UserLevel.beginner)
+        state["sub_queries"] = ["RAG overview"]
+        pubmed = FakeSearchClient()
+
+        await researcher_node(
+            state,
+            arxiv_client=FakeArxivClient(),
+            scraper=FakeScraper(),
+            web_search_fn=make_web_search_fn({}),
+            wikipedia_client=FakeSearchClient(),
+            scholar_client=FakeSearchClient(),
+            openalex_client=FakeSearchClient(),
+            pubmed_client=pubmed,
+        )
+        assert pubmed.calls == []
+
+    async def test_calls_pubmed_for_biomedical(self):
+        state = make_state("s1", "clinical therapy for cancer", UserLevel.beginner)
+        state["sub_queries"] = ["cancer therapy trials"]
+        pubmed = FakeSearchClient(
+            {
+                "clinical therapy for cancer": [
+                    make_source("clinical", SourceType.pubmed, "1")
+                ]
+            }
+        )
+
+        result = await researcher_node(
+            state,
+            arxiv_client=FakeArxivClient(),
+            scraper=FakeScraper(),
+            web_search_fn=make_web_search_fn({}),
+            wikipedia_client=FakeSearchClient(),
+            scholar_client=FakeSearchClient(),
+            openalex_client=FakeSearchClient(),
+            pubmed_client=pubmed,
+        )
+        assert len(pubmed.calls) == 1
+        assert any(s.source_type == SourceType.pubmed for s in result["sources"])
 
     async def test_deduplicates_sources_by_url(self):
         state = make_state("s1", "q", UserLevel.beginner)
         state["sub_queries"] = ["sub-a", "sub-b"]
 
-        same_source = make_arxiv_source("dup", "same-id")
-        arxiv = FakeArxivClient({"sub-a": [same_source], "sub-b": [same_source]})
+        same = make_source("dup", SourceType.wikipedia, "same")
+        wiki = FakeSearchClient({"sub-a": [same], "sub-b": [same]})
 
         result = await researcher_node(
             state,
-            arxiv_client=arxiv,
+            arxiv_client=FakeArxivClient(),
             scraper=FakeScraper(),
             web_search_fn=make_web_search_fn({}),
-            **_empty_extras(),
+            wikipedia_client=wiki,
+            scholar_client=FakeSearchClient(),
+            openalex_client=FakeSearchClient(),
+            pubmed_client=FakeSearchClient(),
         )
 
         assert len(result["sources"]) == 1
@@ -296,7 +343,7 @@ class TestResearcherNode:
         result = await researcher_node(
             state,
             arxiv_client=FakeSearchClient(
-                {"sub-a": [make_arxiv_source("sub-a")]}
+                {"q": [make_arxiv_source("q")]}
             ),
             scraper=FakeScraper(),
             web_search_fn=make_web_search_fn({}),
@@ -329,15 +376,24 @@ class TestResearcherNode:
         state = make_state("s1", "q", UserLevel.beginner)
         state["sub_queries"] = [f"sub-{i}" for i in range(10)]
 
-        arxiv_sources = {f"sub-{i}": [make_arxiv_source(f"sub-{i}", str(i))] for i in range(10)}
-        arxiv = FakeArxivClient(arxiv_sources)
+        wiki_map = {
+            f"sub-{i}": [make_source(f"sub-{i}", SourceType.wikipedia, str(i))]
+            for i in range(10)
+        }
+        openalex_map = {
+            f"sub-{i}": [make_source(f"oa-{i}", SourceType.openalex, f"W{i}")]
+            for i in range(10)
+        }
 
         result = await researcher_node(
             state,
-            arxiv_client=arxiv,
+            arxiv_client=FakeArxivClient(),
             scraper=FakeScraper(),
             web_search_fn=make_web_search_fn({}),
-            **_empty_extras(),
+            wikipedia_client=FakeSearchClient(wiki_map),
+            scholar_client=FakeSearchClient(),
+            openalex_client=FakeSearchClient(openalex_map),
+            pubmed_client=FakeSearchClient(),
         )
 
         from src.agents.researcher import MAX_TOTAL_SOURCES

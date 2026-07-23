@@ -22,6 +22,13 @@ from app.components.agent_progress import (
     render_agent_checklist,
     stream_agent_text,
 )
+from app.components.citations import linkify_citations, render_contradiction_cards
+from app.components.session_store import (
+    LEVEL_KEY,
+    QUERY_KEY,
+    load_pipeline_result,
+    save_pipeline_result,
+)
 from app.components.theme import inject_theme
 from src.agents.graph import PIPELINE_AGENTS, stream_pipeline
 
@@ -98,11 +105,18 @@ def render_recherche_page() -> None:
         unsafe_allow_html=True,
     )
 
+    # Seed form defaults once so navigation does not wipe the last query
+    if QUERY_KEY not in st.session_state:
+        st.session_state[QUERY_KEY] = ""
+    if LEVEL_KEY not in st.session_state:
+        st.session_state[LEVEL_KEY] = "Intermédiaire"
+
     with st.form("recherche_form"):
         col1, col2 = st.columns([3.4, 1.1], gap="medium")
         with col1:
             query = st.text_input(
                 "Question de recherche",
+                key=QUERY_KEY,
                 placeholder=(
                     "e.g. What are the main approaches to hallucination "
                     "mitigation in LLMs?"
@@ -112,13 +126,16 @@ def render_recherche_page() -> None:
             level_label = st.selectbox(
                 "Niveau",
                 ["Débutant", "Intermédiaire", "Expert"],
-                index=1,
+                key=LEVEL_KEY,
             )
         submitted = st.form_submit_button("Lancer la recherche", use_container_width=True)
 
+    saved = load_pipeline_result(st)
+
     if not submitted:
-        if "last_pipeline_result" in st.session_state:
-            _render_saved_result(st.session_state["last_pipeline_result"])
+        if saved:
+            st.caption("Résultats de la dernière recherche (conservés entre les pages).")
+            _render_saved_result(saved)
         else:
             st.markdown(
                 """
@@ -136,6 +153,8 @@ def render_recherche_page() -> None:
 
     if not query.strip():
         st.warning("Merci d'entrer une question avant de lancer la recherche.")
+        if saved:
+            _render_saved_result(saved)
         return
 
     user_level = _LEVEL_TO_VALUE[level_label]
@@ -252,8 +271,8 @@ def render_recherche_page() -> None:
         "state": final_state,
         "agent_streams": agent_streams,
     }
-    st.session_state["last_pipeline_result"] = result_payload
-    _render_saved_result(result_payload, show_stream_replay=False)
+    clean = save_pipeline_result(st, result_payload)
+    _render_saved_result(clean, show_stream_replay=False)
 
 
 def _render_saved_result(
@@ -336,6 +355,18 @@ def _render_saved_result(
         if len(claims) > 20:
             st.caption(f"… et {len(claims) - 20} autres")
 
+    if contradictions:
+        with st.expander(
+            f"Contradictions ({len(contradictions)}) — claim A vs claim B",
+            expanded=True,
+        ):
+            st.markdown(
+                render_contradiction_cards(
+                    [c if isinstance(c, dict) else {} for c in contradictions]
+                ),
+                unsafe_allow_html=True,
+            )
+
     st.markdown(
         """
 <div class="ars-answer">
@@ -346,9 +377,16 @@ def _render_saved_result(
         unsafe_allow_html=True,
     )
     if final_response:
-        st.markdown(final_response)
+        st.markdown(linkify_citations(final_response, sources))
     else:
-        st.info("Pas encore de réponse finale (Teacher stub / pipeline incomplet).")
+        st.info("Pas encore de réponse finale (pipeline incomplet).")
+
+    # Keep graphe helper keys in sync whenever results are shown
+    session_id = state.get("session_id")
+    if session_id:
+        st.session_state["last_session_id"] = session_id
+    st.session_state["last_claims"] = claims
+    st.session_state["last_sources"] = sources
 
     if state.get("error"):
         st.warning(f"Avertissement pipeline : {state['error']}")
