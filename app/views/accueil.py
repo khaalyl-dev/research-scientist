@@ -70,8 +70,12 @@ def render_accueil_page() -> None:
 <div class="ars-panel">
   <h3 class="ars-panel-title">Roadmap MVP</h3>
   <p class="ars-muted" style="margin-bottom:0.4rem;"><strong>Sprint 1</strong> — Sources brutes</p>
-  <p class="ars-muted" style="margin-bottom:0.4rem;"><strong>Sprint 2</strong> — Agents + FAISS + UI</p>
-  <p class="ars-muted" style="margin-bottom:0.4rem;"><strong>Sprint 3</strong> — Contradictions + graphe</p>
+  <p class="ars-muted" style="margin-bottom:0.4rem;">
+      <strong>Sprint 2</strong> — Agents + FAISS + UI
+  </p>
+  <p class="ars-muted" style="margin-bottom:0.4rem;">
+      <strong>Sprint 3</strong> — Contradictions + graphe
+  </p>
   <p class="ars-muted" style="margin:0;"><strong>Sprint 4</strong> — Finalisation &amp; démo</p>
 </div>
 """,

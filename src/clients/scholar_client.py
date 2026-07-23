@@ -41,7 +41,8 @@ class SemanticScholarClient:
         api_key: Optional[str] = None,
         timeout: float = _TIMEOUT,
     ) -> None:
-        self.api_key = (api_key if api_key is not None else os.getenv("SEMANTIC_SCHOLAR_API_KEY") or "").strip()
+        api_key_env = os.getenv("SEMANTIC_SCHOLAR_API_KEY") or ""
+        self.api_key = (api_key if api_key is not None else api_key_env).strip()
         self.timeout = timeout
 
     def search(self, query: str, max_results: int = 2) -> List[SourceSchema]:

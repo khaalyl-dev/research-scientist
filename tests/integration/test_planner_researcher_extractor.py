@@ -25,7 +25,6 @@ from src.clients.brave_client import WebSearchResult
 from src.schemas.common import SessionStatus, SourceType, UserLevel
 from src.schemas.source import SourceSchema
 
-
 # ---------------------------------------------------------------------------
 # Fakes
 # ---------------------------------------------------------------------------
